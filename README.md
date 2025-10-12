@@ -13,8 +13,4 @@ Anschließend können Sie Ihren ersten Einkaufszettel erstellen. Nach einem Klic
 Da zu einem Einkaufszettel irgenwie auch ein **Speiseplan** gehört, gibt es eine Liste mit ein paar **Sonderfunktionen**. Wird eine Liste `Speiseplan` benannt, sind die Besonderheiten aktiv. Dabei werden alle Einträge mit den komenden Wochendentagen gekennzeichnet und farblich hervorgehoben. Jweils um 20 Uhr springt diese Benennung auf den nächsten Tag um. Wenn man die Möglichkeit hat, cronjobs zu verwenden, kann man um 20 Uhr das Skript `cron.php` aufrufen. Damit wird jeweils das oberste Element aus der Liste deaktiviert.
 
 # Screenshots
-<img src="screenshots/Screenshot_1.png" width="300" border="1">
-<img src="screenshots/Screenshot_2.png" width="300" border="1">
-<img src="screenshots/Screenshot_3.png" width="300" border="1">
-<img src="screenshots/Screenshot_4.png" width="300" border="1">
-<img src="screenshots/Screenshot_5.png" width="300" border="1">
+<img src="screenshots/Screenshot_1.png" width="300" border="1">  <img src="screenshots/Screenshot_2.png" width="300" border="1">  <img src="screenshots/Screenshot_3.png" width="300" border="1">  <img src="screenshots/Screenshot_4.png" width="300" border="1">  <img src="screenshots/Screenshot_5.png" width="300" border="1">
