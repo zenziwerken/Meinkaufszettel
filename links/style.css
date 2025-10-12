@@ -1,0 +1,369 @@
+/* alan-sans-300 - latin */
+@font-face {
+  font-display: swap;
+  font-family: "Alan Sans";
+  font-style: normal;
+  font-weight: 300;
+  src: url("./fonts/alan-sans-v1-latin-300.woff2") format("woff2");
+}
+
+/* alan-sans-regular - latin */
+@font-face {
+  font-display: swap;
+  font-family: "Alan Sans";
+  font-style: normal;
+  font-weight: 400;
+  src: url("./fonts/alan-sans-v1-latin-regular.woff2") format("woff2");
+}
+
+/* alan-sans-600 - latin */
+@font-face {
+  font-display: swap;
+  font-family: "Alan Sans";
+  font-style: normal;
+  font-weight: 600;
+  src: url("./fonts/alan-sans-v1-latin-600.woff2") format("woff2");
+}
+
+*,input {
+  font-family: "Alan Sans", Arial, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+}
+
+body {
+  background:  #f4f4f9 url("background.svg") repeat top;
+  background-size: 15rem;
+  font-family: "Alan Sans", Arial, sans-serif;
+  max-width: 600px;
+  font-weight: 300;
+  margin: 50px auto;
+  padding: 20px;
+  transition: opacity 0.2s ease-in-out;
+}
+
+h1 {
+  font-weight: 600;
+  hyphens: auto;
+  border-bottom: 1px solid #e6e6ed;
+  margin: 20px 0 15px;
+  padding: 0 0 10px;
+
+}
+
+.container {
+  border: 1px solid #ddd;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  background-color: #fff;
+  padding: 0 20px;
+  border-radius: 8px;
+}
+
+#register, #login {
+  margin-bottom: 20px;
+}
+
+ul {
+  list-style: none;
+  margin: 20px 0;
+  padding-left: 0;
+}
+
+li {
+  margin: 10px 0;
+  padding: 3px 8px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  border-radius: 0.4rem;
+}
+
+strong {
+  font-weight: 600;
+}
+
+#serverLists li {
+  background: #eeeeee;
+  border: 1px solid #ddd;
+  cursor: pointer;
+}
+
+#serverLists li:hover {
+  outline: 2px solid #999;
+}
+
+#serverLists li.speiseplan {
+  background-color: #ddf2f7;
+}
+
+#itemList {
+  margin-bottom: 25px;
+}
+
+#itemList li {
+  background: #eef6e5;
+  border: 1px solid #d5e8be;
+}
+
+#inactiveList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 10px;
+}
+
+#inactiveList.speiseplan {
+  flex-wrap: nowrap;
+  display: block;
+}
+
+#inactiveList li {
+  background: #efefef;
+  border: 1px solid #d1d1d1;
+  flex: 0 0 calc(50% - 23px);
+  margin: 5px 0;
+}
+
+#inactiveList.speiseplan li {
+  margin: 10px 0;
+}
+
+.itemText {
+  flex: 1;
+  cursor: pointer;
+  user-select: none;
+  font-weight: 400;
+}
+
+#serverLists .itemText {
+  color: #999;
+  font-weight: 300;
+}
+
+#serverLists .itemText strong {
+  color: #000;
+}
+
+.editBtn,
+.deleteBtn {
+  background: #4c4c4c4b;
+  cursor: pointer;
+  width: 31px;
+  height: 25px;
+  background-repeat: no-repeat;
+  background-size: 65%;
+  background-position: 50%;
+}
+
+.editBtn {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23fff' d='M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.42l-2.34-2.34a1 1 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z'/%3E%3C/svg%3E");
+}
+
+.deleteBtn {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='transparent' stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M3 6h18m-2 0-1 14H6L5 6m5 0V4h4v2'/%3E%3C/svg%3E");
+}
+
+input[type="text"], input[type="password"] {
+  padding: 8px;
+  margin: 5px 10px 0 0;
+  width: calc(100% - 144px);
+}
+
+.editInput {
+  padding: 2px 6px !important;
+  font-size: 1rem;
+  margin: 3px 3px 2px !important;
+}
+
+#filename {
+  display: none;
+}
+
+button {
+  padding: 8px 15px;
+  margin: 5px 2px;
+  background-color: #8a8a8a;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #3a3a3a;
+}
+
+.status {
+  margin: 10px 0 20px;
+  padding: 10px;
+  border-radius: 3px;
+}
+
+.success {
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.error {
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+.close {
+  float: inline-end;
+  cursor: pointer;
+}
+
+.close::before {
+  content: "×";
+  display: block;
+  font-size: 2.5rem;
+  color: #999;
+  line-height: 2rem;
+}
+
+.icon {
+  background-image: url("icon.svg");
+  display: block;
+  height: 2.4em;
+  width: 2.4em;
+  background-repeat: no-repeat;
+  background-size: contain;
+  float: left;
+  margin-right: 0.5rem;
+}
+
+.dragging {
+  opacity: 0.4;
+}
+
+
+.dragHandle {
+  cursor: grab;
+  display: flex;
+  align-items: center;
+  user-select: none;
+  width: 20px;
+  height: 20px;
+  fill: #888;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23777'%3E%3Crect width='16' height='2' x='4' y='7' rx='1'/%3E%3Crect width='16' height='2' x='4' y='11' rx='1'/%3E%3Crect width='16' height='2' x='4' y='15' rx='1'/%3E%3C/svg%3E");
+}
+
+.drop-target {
+  border-top: 2px solid #0078d4;
+  background: #e6f0fa;
+}
+
+@keyframes flashHighlight {
+  0% {
+    background-color: #ffff99;
+  }
+
+  50% {
+    background-color: #fff176;
+  }
+
+  100% {
+    background-color: transparent;
+  }
+}
+
+.flash {
+  animation: flashHighlight 1s ease;
+}
+
+#itemSearchDropdown,
+.search-dropdown {
+  position: absolute;
+  background: #fff;
+  border: 1px solid #ccc;
+  z-index: 1000;
+  min-width: 200px;
+  max-height: 200px;
+  overflow-y: auto;
+  display: none;
+}
+
+.dropdown-option {
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.dropdown-option:hover {
+  background-color: #f0f0f0;
+}
+
+#itemList li.speiseplan:before {
+  Font-weight: 600;
+  background-color: #fff9;
+  width: 2rem;
+  padding: 2px;
+  border-radius: 5px;
+  text-align: center;
+}
+
+
+@media (max-width: 37rem) {
+  body {
+    align-items: flex-start;
+    margin: 0;
+    padding: 0;
+    background: none;
+    font-size: 1.2rem;
+  }
+
+  h1 {
+    margin: 10px 0;
+    padding: 0 0 10px;
+  }
+
+  .container {
+    border: none;
+    padding: 10px 20px;
+    box-shadow: none;
+    width: calc(100vw - 40px);
+      background:  none ;
+  }
+
+  .itemText {
+    margin: 4px;
+    hyphens: auto;
+  }
+
+  #inactiveList .itemText {
+    width: calc(100vw / 2 - 102px);
+    overflow: clip;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.4;
+    /* Wichtig für korrekte Höhenberechnung */
+  }
+
+  input[type="text"], input[type="password"],
+  button {
+    font-size: 1rem;
+  }
+
+  input[type="text"], input[type="password"] {
+    width: calc(100% - 158px);
+  }
+
+  .editInput {
+    font-size: 1.2rem;
+  }
+
+  #itemList li.speiseplan:before {
+    width: 2.5rem;
+  }
+}
+
+
+@media (max-width: 24rem) {
+  .modified {
+    display:none;
+  }
+}
