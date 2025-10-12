@@ -32,7 +32,7 @@
 }
 
 body {
-  background:  #f4f4f9 url("background.svg") repeat top;
+  background:  #f4f4f9;
   background-size: 15rem;
   font-family: "Alan Sans", Arial, sans-serif;
   max-width: 600px;
@@ -366,4 +366,5 @@ button:hover {
   .modified {
     display:none;
   }
+
 }
