@@ -4,6 +4,7 @@ Diese schlank gehaltene Webanwendung ist meine Implementierung eines synchronisi
 Anschließend können Sie Ihren ersten Einkaufszettel erstellen. Nach einem Klick auf den Zettel fügen Sie Einträge hinzu, die zunächst als **grüne, aktive Elemente** erscheinen.
 
 **Verwaltung der Einträge:**
+
 **Bearbeiten**: Klicken Sie auf den Stift-Button, um einen Eintrag zu ändern.
 
 **Sortieren:** Ziehen Sie die Einträge per **Drag & Drop** anhand der drei Striche, um die Reihenfolge anzupassen.
