@@ -43,6 +43,8 @@ if ($isSpeiseplan) {
     <link rel="manifest" href="links/website.manifest" crossorigin="use-credentials">
     <link rel="stylesheet" href="links/style.css?<?= $styleVersion ?>">
     <link rel="icon" type="image/svg+xml" href="links/icon.svg" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32">
+    <link rel="apple-touch-icon" href="links/apple-touch-icon.png">
     <title>Meinkaufszettel</title>
     <?= $speiseplanCss ?>
 </head>

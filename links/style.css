@@ -70,7 +70,7 @@ ul {
 
 li {
   margin: 10px 0;
-  padding: 3px 8px;
+  padding: 0 8px 0 0;
   display: flex;
   align-items: center;
   gap: 3px;
@@ -85,6 +85,7 @@ strong {
   background: #eeeeee;
   border: 1px solid #ddd;
   cursor: pointer;
+  padding: 0 8px;
 }
 
 #serverLists li:hover {
@@ -126,10 +127,12 @@ strong {
   border: 1px solid #d1d1d1;
   flex: 0 0 calc(50% - 23px);
   margin: 5px 0;
+  padding: 0 8px;
 }
 
-#inactiveList.speiseplan li {
+#inactiveList.speiseplan li, li.speiseplan {
   margin: 10px 0;
+  padding: 0 8px;
 }
 
 .itemText {
@@ -148,15 +151,14 @@ strong {
   color: #000;
 }
 
-.editBtn,
-.deleteBtn {
-  background: #4c4c4c4b;
-  cursor: pointer;
-  width: 31px;
-  height: 25px;
-  background-repeat: no-repeat;
-  background-size: 65%;
-  background-position: 50%;
+.editBtn, .deleteBtn {
+    background: #4c4c4c4b;
+    cursor: pointer;
+    width: 31px;
+    height: 27px;
+    background-repeat: no-repeat;
+    background-size: 65%;
+    background-position: 50%;
 }
 
 .editBtn {
@@ -258,13 +260,16 @@ button:hover {
 
 
 .dragHandle {
-  cursor: grab;
-  display: flex;
-  align-items: center;
-  user-select: none;
-  width: 20px;
-  height: 20px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%230007'%3E%3Crect width='16' height='2' x='4' y='7' rx='1'/%3E%3Crect width='16' height='2' x='4' y='11' rx='1'/%3E%3Crect width='16' height='2' x='4' y='15' rx='1'/%3E%3C/svg%3E");
+    cursor: grab;
+    display: flex;
+    align-items: center;
+    user-select: none;
+    width: 28px;
+    height: 32px;
+    background-size: 75%;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%230007'%3E%3Crect width='16' height='2' x='4' y='7' rx='1'/%3E%3Crect width='16' height='2' x='4' y='11' rx='1'/%3E%3Crect width='16' height='2' x='4' y='15' rx='1'/%3E%3C/svg%3E");
 }
 
 .drop-target {
@@ -279,12 +284,12 @@ button:hover {
   background-color: #8a8a8a;
   color: #fff;
   border: none;
-  padding: 2px 10px 7px;
+  padding: 4px 10px 7px;
   margin-left: 8px;
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.9rem;
-  height: 25px;
+  height: 28px;
   min-width: 72px;
   box-shadow: 0 1px 0 rgba(0,0,0,0.1);
 
