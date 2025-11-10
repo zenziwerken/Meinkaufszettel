@@ -7,10 +7,11 @@ Anschließend können Sie Ihren ersten Einkaufszettel erstellen. Nach einem Klic
 **Bearbeiten**: Klicken Sie auf den Stift-Button, um einen Eintrag zu ändern.\
 **Sortieren:** Ziehen Sie die Einträge per **Drag & Drop** anhand der drei Striche, um die Reihenfolge anzupassen.\
 **Abhaken**: Ein Klick auf den **Namen** des Elements markiert es als erledigt. Es wird dann **grau hinterlegt** und nach unten verschoben.\
-**Wiederherstellen/Löschen**: Inaktive, graue Elemente können Sie durch einen Klick auf den **Namen wieder aktivieren** oder mit dem **Mülleimer-Button endgültig löschen**.
+**Wiederherstellen/Löschen**: Inaktive, graue Elemente können Sie durch einen Klick auf den **Namen wieder aktivieren** oder mit dem **Mülleimer-Button endgültig löschen**.\
+Abhaken und endgültig löschen werden durch eine kurze Bedenkzeit vor versehentlicher Verwendung abgesichert.
 
 # Speiseplan
-Da zu einem Einkaufszettel irgenwie auch ein **Speiseplan** gehört, gibt es eine Liste mit ein paar **Sonderfunktionen**. Wird eine Liste `Speiseplan` benannt, sind die Besonderheiten aktiv. Dabei werden alle Einträge mit den kommenden Wochendentagen gekennzeichnet und farblich hervorgehoben. Jweils um 20 Uhr springt diese Benennung auf den nächsten Tag um. Wenn man die Möglichkeit hat, cronjobs zu verwenden, kann man um 20 Uhr das Skript `cron.php` aufrufen. Damit wird jeweils das oberste Element aus der Liste deaktiviert.
+Da zu einem Einkaufszettel irgendwie auch ein **Speiseplan** gehört, gibt es eine Liste mit ein paar **Sonderfunktionen**. Wird eine Liste `Speiseplan` benannt, sind die Besonderheiten aktiv. Dabei werden alle Einträge mit den kommenden Wochendentagen gekennzeichnet und farblich hervorgehoben. Jweils um 20 Uhr springt diese Benennung auf den nächsten Tag um. Wenn man die Möglichkeit hat, cronjobs zu verwenden, kann man um 20 Uhr das Skript `cron.php` aufrufen. Damit wird jeweils das oberste Element aus der Liste deaktiviert.
 
 # Screenshots
 <img src="screenshots/Screenshot_1.png" width="300">  <img src="screenshots/Screenshot_2.png" width="300">  <img src="screenshots/Screenshot_3.png" width="300">  <img src="screenshots/Screenshot_4.png" width="300">  <img src="screenshots/Screenshot_5.png" width="300">
