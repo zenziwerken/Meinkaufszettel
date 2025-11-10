@@ -32,13 +32,12 @@
 }
 
 body {
-  background:  #f4f4f9;
-  background-size: 15rem;
   font-family: "Alan Sans", Arial, sans-serif;
   max-width: 600px;
   font-weight: 300;
   margin: 50px auto;
   padding: 20px;
+  background-color: #f4f4f9;
   transition: opacity 0.2s ease-in-out;
 }
 
@@ -94,6 +93,12 @@ strong {
 
 #serverLists li.speiseplan {
   background-color: #ddf2f7;
+   border: 1px solid #90cedd;
+}
+
+#serverLists li.empty {
+  background-color: #fafafa;
+   border: 1px solid #ccc;
 }
 
 #itemList {
@@ -159,8 +164,21 @@ strong {
 }
 
 .deleteBtn {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='transparent' stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M3 6h18m-2 0-1 14H6L5 6m5 0V4h4v2'/%3E%3C/svg%3E");
+background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23FFF' d='M14.69 10.82c0-.48-.41-.88-.88-.88-.48 0-.88.41-.88.88v6.49c0 .48.41.88.88.88.48 0 .88-.41.88-.88v-6.49zm-4.13 0c0-.48-.41-.88-.88-.88s-.88.41-.88.88v6.49c0 .48.41.88.88.88s.88-.41.88-.88v-6.49zm-5.9-2.65v11.21c0 1.29 1.07 2.36 2.36 2.36h9.44c1.29 0 2.36-1.07 2.36-2.36V8.17h-1.77v11.21c0 .33-.26.59-.59.59H7.02c-.33 0-.59-.26-.59-.59V8.17H4.66zm4.94-5.9c-.48 0-.92.29-1.11.77l-.58 1.59H4.37c-.48 0-.88.41-.88.88s.4.89.88.89h14.75c.47 0 .88-.41.88-.89s-.41-.88-.88-.88h-3.54l-.59-1.59c-.18-.48-.63-.77-1.11-.77H9.6z'/%3E%3C/svg%3E");
 }
+
+
+/* Edit-Button während des Editierens: Häkchen-Symbol */
+.editBtn.editing {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23FFF' d='M9 16.2L4.8 12l-1.4 1.4L9 19l12-12-1.4-1.4z'/%3E%3C/svg%3E");
+  background-color: #28a745;
+  transition: background-color 0.15s ease;
+}
+
+.editBtn.editing:hover {
+  background-color: #218838;
+}
+
 
 input[type="text"], input[type="password"] {
   padding: 8px;
@@ -246,13 +264,60 @@ button:hover {
   user-select: none;
   width: 20px;
   height: 20px;
-  fill: #888;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23777'%3E%3Crect width='16' height='2' x='4' y='7' rx='1'/%3E%3Crect width='16' height='2' x='4' y='11' rx='1'/%3E%3Crect width='16' height='2' x='4' y='15' rx='1'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%230007'%3E%3Crect width='16' height='2' x='4' y='7' rx='1'/%3E%3Crect width='16' height='2' x='4' y='11' rx='1'/%3E%3Crect width='16' height='2' x='4' y='15' rx='1'/%3E%3C/svg%3E");
 }
 
 .drop-target {
   border-top: 2px solid #0078d4;
   background: #e6f0fa;
+}
+
+.undoBtn {
+  position: relative;
+  overflow: hidden;
+  z-index: 1;
+  background-color: #8a8a8a;
+  color: #fff;
+  border: none;
+  padding: 2px 10px 7px;
+  margin-left: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  height: 25px;
+  min-width: 72px;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.1);
+
+  /* progress als Hintergrund (voll sichtbar = 100%) */
+  background-image: linear-gradient(90deg, #444, #444);
+  background-repeat: no-repeat;
+  background-position: left center;
+  background-size: 0% 100%;
+}
+
+/* animiert das Schrumpfen des Hintergrunds von 100% auf 0% in 5s */
+li.pending-active .undoBtn {
+  animation: undo-bg-shrink 5s linear forwards;
+}
+
+/* Hover pausiert die Animation für bessere UX */
+li.pending-active .undoBtn:hover {
+  background-color: #3a3a3a;
+}
+
+/* Bar-Animation: background-size von voller Breite auf 0 */
+@keyframes undo-bg-shrink {
+  from { background-size: 0% 100%; }
+  to   { background-size: 100% 100%; }
+}
+
+/* Reduced motion respektieren */
+@media (prefers-reduced-motion: reduce) {
+  li.pending-active .undoBtn {
+    animation: none;
+    background-size: 40% 100%;
+    opacity: 0.9;
+  }
 }
 
 @keyframes flashHighlight {
@@ -359,6 +424,13 @@ button:hover {
   #itemList li.speiseplan:before {
     width: 2.5rem;
   }
+
+  .undoBtn {
+    padding: 1px 8px 6px;
+    font-size: 1rem;
+    min-width: 60px;
+    height: 26px;
+  }
 }
 
 
@@ -366,5 +438,4 @@ button:hover {
   .modified {
     display:none;
   }
-
 }

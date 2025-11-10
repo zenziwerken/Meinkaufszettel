@@ -96,7 +96,7 @@ if ($action === 'login') {
     if (password_verify($data['password'], $hashedPassword)) {
 
         // Set cookie (secure, httpOnly, sameSite=strict)
-        $_SESSION['auth'] = 'true';
+        $_SESSION['auth'] = __DIR__;
         setcookie('auth', 'true', [
             'expires' => time() + 15552000, // 180 Tage
             'path' => '/',
@@ -129,7 +129,8 @@ if ($action === 'login') {
     exit;
 }
 
-if (!$_SESSION['auth']) {
+if (!isset($_SESSION['auth']) || $_SESSION['auth'] !== __DIR__) {
+    // Prüfen ob Token-Cookie gesetzt ist
     if (!isset($_COOKIE['token']) || !is_string($_COOKIE['token'])) {
         sendError('Nicht autorisiert. Bitte erneut anmelden.', 401);
     }
@@ -140,7 +141,7 @@ if (!$_SESSION['auth']) {
     if (!file_exists($tokenFile)) {
         sendError('Nicht autorisiert. Bitte erneut anmelden.', 401);
     } else {
-        $_SESSION['auth'] = 'true';
+        $_SESSION['auth'] = __DIR__;
     }
 }
 

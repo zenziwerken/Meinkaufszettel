@@ -28,8 +28,8 @@ if ($isSpeiseplan) {
         $dayIndex = ($startIndex + $i) % 7;
         $dayAbbr = $germanDays[$dayIndex];
         $cssIndex = $i + 1;
-        echo "        #itemList li.speiseplan:nth-of-type(7n+{$cssIndex}):before { content: '{$dayAbbr}'; }\n";
-        echo "        #itemList li.speiseplan:nth-of-type(7n+{$cssIndex}) { background: {$colors[$dayIndex]}; }\n";
+        echo "        #itemList li.speiseplan:nth-of-type(7n+{$cssIndex}):before { content: '{$dayAbbr}';}\n";
+        echo "        #itemList li.speiseplan:nth-of-type(7n+{$cssIndex}) { background: {$colors[$dayIndex]}; border-color: {$colorBorder[$dayIndex]}}\n";
     }
     echo "    </style>\n";
     $speiseplanCss = ob_get_clean();

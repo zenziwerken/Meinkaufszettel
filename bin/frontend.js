@@ -271,7 +271,7 @@ function setupItemSearch() {
     positionDropdown();
     dropdown.innerHTML = "";
 
-    if (searchText.length < 3) {
+    if (searchText.length < 2) {
       dropdown.style.display = "none";
       return;
     }
@@ -515,33 +515,91 @@ function sortInactiveList() {
 
 function moveToInactive(li) {
   if (!li) return;
+  // Verhindere Doppelaufrufe, wenn bereits ein Pending-Timer existiert
+  if (li._undoTimer) return;
+
   const text = li.querySelector(".itemText").textContent.trim();
+
+  // UI: Zeige Undo-Button am aktiven Element und markiere als "pending"
+  const undoBtn = document.createElement("button");
+  undoBtn.className = "undoBtn";
+  undoBtn.title = "Rückgängig";
+  undoBtn.textContent = "Rückgängig";
+  // Stoppe weitere Click-Propagation (verhindert erneutes Auslösen)
+  undoBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+  });
+
+  li.appendChild(undoBtn);
+  li.classList.add("pending-active");
+
+  // Bereite die neuen Arrays für die spätere Speicherung vor (Item gilt als entfernt)
   const activeItems = Array.from(document.querySelectorAll("#itemList li")).map((l) =>
     l.querySelector(".itemText").textContent.trim()
   );
   const inactiveItems = Array.from(document.querySelectorAll("#inactiveList li")).map((l) =>
     l.querySelector(".itemText").textContent.trim()
   );
+
   const newActiveItems = activeItems.filter((item) => item !== text);
-  const newInactiveItems = [...inactiveItems, text];
+  const newInactiveItems = [...new Set([...inactiveItems, text])];
 
   let filename = document.getElementById("filename")?.value.trim();
   if (!filename) filename = getFilenameFromUrl() || "liste";
 
-  saveListToServer(
-    filename,
-    newActiveItems,
-    newInactiveItems,
-    function () {
-      const inactiveLi = createInactiveItem(text);
-      document.getElementById("inactiveList")?.appendChild(inactiveLi);
-      if (li.parentElement) li.parentElement.removeChild(li);
-      sortInactiveList();
-    },
-    function (error) {
-      showStatus(`Fehler: ${error}`, "error");
+  // Timer: nach 5 Sekunden tatsächlich auf dem Server speichern und Element verschieben
+  li._undoTimer = setTimeout(() => {
+    // Entferne visuelle Pending-Markierung bevor Save (UI-Feedback)
+    li.classList.remove("pending-active");
+    if (undoBtn.parentElement === li) li.removeChild(undoBtn);
+
+    saveListToServer(
+      filename,
+      newActiveItems,
+      newInactiveItems,
+      function () {
+        // Beim Erfolg: aktives li entfernen (falls noch vorhanden) und inaktives Element anfügen
+        if (li.parentElement) li.parentElement.removeChild(li);
+        const finalLi = createInactiveItem(text);
+        document.getElementById("inactiveList")?.appendChild(finalLi);
+        sortInactiveList();
+        updateActiveOrder();
+      },
+      function (error) {
+        // Bei Fehler: Benutzer informieren und aktives Element wiederherstellen / belassen
+        showStatus(`Fehler: ${error}`, "error");
+        // Falls Element bereits entfernt wurde, füge ein neues Active-Element hinzu
+        if (!document.querySelector(`#itemList li .itemText`) || !Array.from(document.querySelectorAll("#itemList li")).some(l => l.querySelector(".itemText").textContent.trim() === text)) {
+          const restoredLi = createActiveItem(text);
+          document.getElementById("itemList")?.appendChild(restoredLi);
+        } else {
+          // Falls das ursprüngliche Element noch vorhanden: entferne pending-Markierung und Button
+          if (li) {
+            li.classList.remove("pending-active");
+            if (undoBtn.parentElement === li) li.removeChild(undoBtn);
+          }
+        }
+        sortInactiveList();
+        updateActiveOrder();
+      }
+    );
+
+    delete li._undoTimer;
+  }, 5000);
+
+  // Undo-Handler: innerhalb der 5s Rückgängig machen (kein Server-Call)
+  undoBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (li._undoTimer) {
+      clearTimeout(li._undoTimer);
+      delete li._undoTimer;
     }
-  );
+    // Entferne UI-Pending-Markierung und Undo-Button
+    li.classList.remove("pending-active");
+    if (undoBtn.parentElement === li) li.removeChild(undoBtn);
+    // Keine Server-Änderung nötig — Reihenfolge ggf. neu speichern
+    updateActiveOrder();
+  });
 }
 
 function moveToActive(li) {
@@ -575,10 +633,27 @@ function moveToActive(li) {
   );
 }
 
+
 function deleteInactiveItem(button) {
   const li = button?.parentElement;
   if (!li) return;
+  // Verhindere Doppelaufrufe, wenn bereits ein Pending-Timer existiert
+  if (li._undoTimer) return;
+
   const text = li.querySelector(".itemText").textContent.trim();
+
+  // UI: Zeige Undo-Button am inaktiven Element und markiere als "pending"
+  const undoBtn = document.createElement("button");
+  undoBtn.className = "undoBtn";
+  undoBtn.title = "Rückgängig";
+  undoBtn.textContent = "Rückgängig";
+  // Stoppe weitere Click-Propagation
+  undoBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+  });
+
+  li.appendChild(undoBtn);
+  li.classList.add("pending-active");
 
   let filename = document.getElementById("filename")?.value.trim();
   if (!filename) filename = getFilenameFromUrl() || "liste";
@@ -591,18 +666,62 @@ function deleteInactiveItem(button) {
   );
   const newInactiveItems = inactiveItems.filter((item) => item !== text);
 
-  saveListToServer(
-    filename,
-    activeItems,
-    newInactiveItems,
-    function () {
-      if (li.parentElement) li.parentElement.removeChild(li);
-      sortInactiveList();
-    },
-    function (error) {
-      showStatus(`Fehler: ${error}`, "error");
+  // Timer: nach 5 Sekunden tatsächlich auf dem Server löschen
+  li._undoTimer = setTimeout(() => {
+    // Entferne visuelle Pending-Markierung bevor Save
+    li.classList.remove("pending-active");
+    if (undoBtn.parentElement === li) li.removeChild(undoBtn);
+
+    saveListToServer(
+      filename,
+      activeItems,
+      newInactiveItems,
+      function () {
+        // Erfolg: inaktives li entfernen
+        if (li.parentElement) li.parentElement.removeChild(li);
+        sortInactiveList();
+        updateActiveOrder();
+      },
+      function (error) {
+        // Fehler: Benutzer informieren und inaktives Element wiederherstellen / belassen
+        showStatus(`Fehler: ${error}`, "error");
+        // Falls Element nicht mehr vorhanden ist, füge ein neues hinzu
+        if (
+          !document.querySelector(`#inactiveList li .itemText`) ||
+          !Array.from(document.querySelectorAll("#inactiveList li")).some(
+            (l) => l.querySelector(".itemText").textContent.trim() === text
+          )
+        ) {
+          const restoredLi = createInactiveItem(text);
+          document.getElementById("inactiveList")?.appendChild(restoredLi);
+        } else {
+          if (li) {
+            li.classList.remove("pending-active");
+            if (undoBtn.parentElement === li) li.removeChild(undoBtn);
+          }
+        }
+        sortInactiveList();
+        updateActiveOrder();
+      }
+    );
+
+    delete li._undoTimer;
+  }, 5000);
+
+  // Undo-Handler: innerhalb der 5s Rückgängig machen (kein Server-Call)
+  undoBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (li._undoTimer) {
+      clearTimeout(li._undoTimer);
+      delete li._undoTimer;
     }
-  );
+    // Entferne UI-Pending-Markierung und Undo-Button
+    li.classList.remove("pending-active");
+    if (undoBtn.parentElement === li) li.removeChild(undoBtn);
+    // Keine Server-Änderung nötig
+    sortInactiveList();
+    updateActiveOrder();
+  });
 }
 
 // ==========================================================
@@ -618,6 +737,7 @@ function editItem(button) {
   input.className = "editInput";
   input.style.flex = "1";
 
+  button.classList.add("editing");
   button.disabled = true;
   li.insertBefore(input, span);
   span.style.display = "none";
@@ -649,6 +769,7 @@ function editItem(button) {
     li.removeEventListener("click", tempHandler, { capture: true });
     if (originalMoveHandler) li.addEventListener("click", originalMoveHandler);
     button.disabled = false;
+    button.classList.remove("editing");
   }
 
   function saveInput(el) {
@@ -724,6 +845,8 @@ function showServerLists(lists) {
     let entryText = "";
     if (list.itemCount === 1) entryText = "1&nbsp;Eintrag";
     else if (list.itemCount > 1) entryText = list.itemCount + "&nbsp;Einträge";
+
+    if (list.itemCount === 0) li.classList.add("empty");
 
     const entryFilename = replaceUnderscoresWithSpaces(list.filename.replace(".json", ""));
     li.innerHTML = `
@@ -876,6 +999,9 @@ function addItem() {
   const input = document.getElementById("newItem");
   const text = input.value.trim();
   if (!text) return;
+  
+  const dropdown = document.getElementById("itemSearchDropdown");
+  if (dropdown) dropdown.style.display = "none";
 
   let filename =
     document.getElementById("filename").value.trim() ||
