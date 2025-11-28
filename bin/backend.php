@@ -142,6 +142,7 @@ if (!isset($_SESSION['auth']) || $_SESSION['auth'] !== __DIR__) {
         sendError('Nicht autorisiert. Bitte erneut anmelden.', 401);
     } else {
         $_SESSION['auth'] = __DIR__;
+        touch($tokenFile); // Token-Aktualisierung  
     }
 }
 
@@ -229,7 +230,6 @@ if ($action === 'list') {
         $filename = basename($file, '.json');
         $jsonContent = @file_get_contents($file);
         if ($jsonContent === false) {
-            // skip or log; hier Fehler zurückgeben könnte die gesamte Liste blockieren
             continue;
         }
         $jsonData = json_decode($jsonContent, true);
@@ -238,7 +238,7 @@ if ($action === 'list') {
         $list[] = [
             'filename' => $filename,
             'itemCount' => $itemCount,
-            'lastModified' => verstaendlicheZeitangabe( filemtime($file)),
+            'lastModified' => verstaendlicheZeitangabe(filemtime($file)),
         ];
     }
     echo json_encode($list);
@@ -308,6 +308,121 @@ if ($action === 'save') {
         'filename' => basename($fullPath),
         'message' => 'Liste erfolgreich als JSON gespeichert',
         'itemCount' => $totalItems
+    ]);
+    exit;
+}
+
+if ($action === 'sync') {
+    $filename = isset($data['filename']) ? trim((string)$data['filename']) : '';
+    $active = $data['active'] ?? null;
+    $inactive = $data['inactive'] ?? null;
+
+    if (!is_array($active) || !is_array($inactive)) sendError('Active und Inactive müssen Arrays sein.', 400);
+    if (!preg_match($filenameMatch, $filename)) sendError('Ungültiger Name. Nur Buchstaben, Zahlen, "/" und Leerzeichen erlaubt.', 400);
+    if (count($active) > $maxItemsPerList || count($inactive) > $maxItemsPerList) sendError("Zu viele Einträge in der Liste. Nur $maxItemsPerList Einträge pro Liste erlaubt", 400);
+
+    // Validate items: type and length
+    foreach (['active' => $active, 'inactive' => $inactive] as $k => $arr) {
+        foreach ($arr as $i => $item) {
+            if (!is_string($item) && !is_numeric($item)) {
+                sendError("Ungültiger Eintrag in $k[$i].", 400);
+            }
+            $s = (string)$item;
+            if (mb_strlen($s) > $maxItemLength) {
+                sendError("Ein Eintrag in $k ist zu lang. Nur $maxItemLength Zeichen erlaubt.", 400);
+            }
+        }
+    }
+
+    $fullPath = $resolveSavePath($filename);
+    if (!$fullPath) sendError('Server-Fehler beim Pfadauflösen.', 500);
+
+    // Load existing data if possible
+    $existing = ['active' => [], 'inactive' => []];
+    if (file_exists($fullPath)) {
+        $jsonContent = @file_get_contents($fullPath);
+        if ($jsonContent !== false) {
+            $decoded = json_decode($jsonContent, true);
+            if (is_array($decoded)) {
+                if (isset($decoded['active']) && is_array($decoded['active'])) $existing['active'] = $decoded['active'];
+                if (isset($decoded['inactive']) && is_array($decoded['inactive'])) $existing['inactive'] = $decoded['inactive'];
+            }
+        }
+    }
+
+    // Normalisiere Eingaben
+    $frontendActive = array_values(array_map('strval', $active));
+    $frontendInactive = array_values(array_map('strval', $inactive));
+
+    // Start mit existierenden Sets (erhält Reihenfolge soweit möglich)
+    $resultActive = array_values($existing['active']);
+    $resultInactive = array_values($existing['inactive']);
+
+    // Compose resulting items
+    $items = ['active' => $resultActive, 'inactive' => $resultInactive];
+
+    // Frühzeitige Prüfung: Wenn keine Änderungen gegenüber der vorhandenen Datei vorliegen,
+    // sofort an das Frontend zurückmelden und den Schreibvorgang überspringen.
+    if ($frontendActive === $resultActive && $frontendInactive === $resultInactive) {
+        echo json_encode([
+            'success' => true,
+            'message' => 'keine Änderungen',
+        ]);
+        exit;
+    }
+
+    // 1) Items, die das Frontend als inaktiv meldet, müssen inaktiv werden
+    foreach ($frontendInactive as $item) {
+        if (!in_array($item, $resultInactive, true)) $resultInactive[] = $item;
+        // Falls noch aktiv vorhanden: entfernen
+        $idx = array_search($item, $resultActive, true);
+        if ($idx !== false) unset($resultActive[$idx]);
+    }
+
+    // 2) Frontend-active: nur synchronisieren, wenn sie nicht (bereits) in der inaktiven Liste sind
+    foreach ($frontendActive as $item) {
+        if (in_array($item, $resultInactive, true)) {
+            // Item ist inaktuell auf dem Server, respektiere passive Status
+            continue;
+        }
+        if (!in_array($item, $resultActive, true)) $resultActive[] = $item;
+    }
+
+    // 3) Entferne Duplikate und sorge dafür, dass active & inactive disjunkt sind
+    $resultInactive = array_values(array_unique($resultInactive));
+    $resultActive = array_values(array_unique($resultActive));
+    // Entferne Überschneidungen: passive gewinnt
+    $resultActive = array_values(array_filter($resultActive, function($it) use ($resultInactive) {
+        return !in_array($it, $resultInactive, true);
+    }));
+
+    if (count($resultActive) > $maxItemsPerList || 
+        count($resultInactive) > $maxItemsPerList) {
+            sendError("Zu viele Einträge nach Synchronisation. Max $maxItemsPerList erlaubt.", 400);
+    }
+
+    $jsonContent = json_encode($items, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    if ($jsonContent === false) sendError('Server-Fehler beim JSON-Encoding.', 500);
+
+    // Atomic write
+    $tmp = $fullPath . '.tmp-' . bin2hex(random_bytes(6));
+    $written = file_put_contents($tmp, $jsonContent, LOCK_EX);
+    if ($written === false) {
+        @unlink($tmp);
+        sendError('Konnte Liste nicht speichern.', 500);
+    }
+    @chmod($tmp, 0640);
+    if (!rename($tmp, $fullPath)) {
+        @unlink($tmp);
+        sendError('Konnte Liste nicht umbenennen.', 500);
+    }
+
+    echo json_encode([
+        'success' => true,
+        'filename' => basename($fullPath),
+        'message' => 'Änderungen durch anderen Benutzer',
+        'active' => $items['active'],
+        'inactive' => $items['inactive']
     ]);
     exit;
 }

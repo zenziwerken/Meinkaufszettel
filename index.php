@@ -26,7 +26,7 @@ if ($isSpeiseplan) {
     echo "<style>\n";
     for ($i = 0; $i < 7; $i++) {
         $dayIndex = ($startIndex + $i) % 7;
-        $dayAbbr = $germanDays[$dayIndex];
+        $dayAbbr = $dayNames[$dayIndex];
         $cssIndex = $i + 1;
         echo "        #itemList li.speiseplan:nth-of-type(7n+{$cssIndex}):before { content: '{$dayAbbr}';}\n";
         echo "        #itemList li.speiseplan:nth-of-type(7n+{$cssIndex}) { background: {$colors[$dayIndex]}; border-color: {$colorBorder[$dayIndex]}}\n";
@@ -111,6 +111,8 @@ if ($isSpeiseplan) {
     </div>
     <script>
         const speiseplanName = <?= json_encode($speiseplanName) ?>;
+        const syncInterval = <?= $syncInterval ?>;
+        const inactivityTimeoutMs = <?= $inactivityTimeoutMs ?>;
     </script>
     <script src="bin/frontend.js?<?= $scriptVersion ?>"></script>
 </body>

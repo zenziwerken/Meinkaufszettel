@@ -8,10 +8,48 @@ function showStatus(message, type) {
   if (!statusDiv) return;
   statusDiv.textContent = message;
   statusDiv.className = "status " + (type || "");
-  setTimeout(() => {
-    statusDiv.textContent = "";
-    statusDiv.className = "status";
-  }, 5000);
+  try {
+    statusDiv.setAttribute('role', 'status');
+    statusDiv.tabIndex = 0;
+
+    // Falls bereits ein Timer vorhanden ist (ältere Meldung), räume auf
+    try {
+      if (statusDiv._dismissTimer) {
+        clearTimeout(statusDiv._dismissTimer);
+        delete statusDiv._dismissTimer;
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    const clear = () => {
+      // Timer entfernen falls gesetzt
+      try {
+        if (statusDiv._dismissTimer) {
+          clearTimeout(statusDiv._dismissTimer);
+          delete statusDiv._dismissTimer;
+        }
+      } catch (e) {}
+      statusDiv.textContent = "";
+      statusDiv.className = "status";
+      statusDiv.removeAttribute('role');
+      statusDiv.removeAttribute('tabindex');
+      statusDiv.onclick = null;
+      statusDiv.onkeydown = null;
+    };
+
+    statusDiv.onclick = clear;
+    statusDiv.onkeydown = (e) => {
+      if (e.key === 'Enter' || e.key === ' ') clear();
+    };
+
+    // Verhalten: Fehler (`error`) bleiben stehen; Änderungen (`change`) verschwinden nach 10s
+    if (type === 'change') {
+      statusDiv._dismissTimer = setTimeout(clear, 10000);
+    }
+  } catch (e) {
+    // Falls der Browser gewisse Eigenschaften nicht unterstützt, ignoriere silently
+  }
 }
 
 function replaceSpacesWithUnderscores(text) {
@@ -117,13 +155,157 @@ function loadList() {
       if (Array.isArray(data.inactive)) {
         data.inactive.forEach((item) => ulInactive.appendChild(createInactiveItem(item)));
         sortInactiveList();
-      }
+          }
+
+          // Periodische Synchronisation starten (oder neu starten) für diese Liste
+          try {
+            startPeriodicSync(filename);
+          } catch (e) {
+            console.warn("Konnte Periodic Sync nicht starten:", e);
+          }
     })
     .catch((error) => {
       showStatus("Fehler: " + error.message, "error");
       console.error("Fehler beim Laden der Liste:", error);
     });
 }
+
+// --- Periodische Synchronisation ---
+let _syncIntervalId = null;
+function stopPeriodicSync() {
+  if (_syncIntervalId) {
+    clearInterval(_syncIntervalId);
+    _syncIntervalId = null;
+  }
+}
+
+function startPeriodicSync(filename) {
+  stopPeriodicSync();
+  if (!filename) return;
+  // initial delay before first sync: 60s
+  _syncIntervalId = setInterval(() => syncNow(filename), syncInterval);
+}
+
+function syncNow(filename) {
+  if (!filename) filename = document.getElementById("filename")?.value.trim() || getFilenameFromUrl() || "liste";
+  if (!filename) return;
+
+  const activeItems = Array.from(document.querySelectorAll("#itemList li")).map((li) =>
+    li.querySelector(".itemText").textContent.trim()
+  );
+  const inactiveItems = Array.from(document.querySelectorAll("#inactiveList li")).map((li) =>
+    li.querySelector(".itemText").textContent.trim()
+  );
+
+  fetch("bin/backend.php", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "sync", filename, active: activeItems, inactive: inactiveItems }),
+  })
+    .then((response) => {
+      if (!response.ok) throw new Error(`Server antwortet nicht (${response.status})`);
+      return response.json();
+    })
+    .then((data) => {
+      if (!data || data.success === false) {
+        // Backend kann false zurückgeben; wir melden kurz und beenden
+        const msg = data && data.error ? data.error : 'Unbekannter Backend-Fehler beim Sync.';
+        showStatus(`Fehler bei Sync: ${msg}`, "error");
+        return;
+      }
+      // Wenn aktive/inaktive Arrays zurückgegeben werden und sie sich vom Client unterscheiden, UI aktualisieren
+      if (data.message !== 'keine Änderungen') {
+        if (
+          Array.isArray(data.active) &&
+          Array.isArray(data.inactive) &&
+          (
+            JSON.stringify(activeItems) !== JSON.stringify(data.active) ||
+            JSON.stringify(inactiveItems) !== JSON.stringify(data.inactive)
+          )
+        ) {
+          const ulActive = document.getElementById("itemList");
+          const ulInactive = document.getElementById("inactiveList");
+          if (!ulActive || !ulInactive) return;
+
+          // Entferne bestehende LIs (inkl. möglicher observer) und erstelle neue
+          ulActive.innerHTML = "";
+          ulInactive.innerHTML = "";
+
+          data.active.forEach((item) => ulActive.appendChild(createActiveItem(item)));
+          data.inactive.forEach((item) => ulInactive.appendChild(createInactiveItem(item)));
+          sortInactiveList();
+          showStatus("Änderung durch anderen Benutzer", "change");
+        }
+      } 
+    })
+    .catch((err) => {
+      showStatus(`Server nicht erreichbar`, "error");
+    });
+}
+
+// --- Inaktivitäts-Timer: nach x Minuten ohne Aktion zurück zur Übersichtsseite ---
+let _inactivityTimerId = null;
+let _inactivityListenersAdded = false;
+const _activityEvents = ["click", "keydown", "mousemove", "touchstart", "scroll", "input"];
+
+function _activityHandler() {
+  resetInactivityTimer();
+}
+
+function startInactivityTimer() {
+  stopInactivityTimer();
+  const filename = document.getElementById("filename")?.value.trim() || getFilenameFromUrl();
+  if (!filename) return; // nur starten, wenn eine Liste geöffnet ist
+
+  _inactivityTimerId = setTimeout(() => {
+    stopPeriodicSync();
+    stopInactivityTimer();
+    try {
+      showStatus("Wegen Inaktivität: Zurück zur Listenübersicht", "change");
+    } catch (e) {}
+    setTimeout(() => {
+      window.location.href = window.location.origin + window.location.pathname;
+    }, 2000);
+  }, inactivityTimeoutMs);
+
+  if (!_inactivityListenersAdded) {
+    _activityEvents.forEach((ev) => document.addEventListener(ev, _activityHandler, { passive: true }));
+    _inactivityListenersAdded = true;
+  }
+}
+
+function resetInactivityTimer() {
+  if (_inactivityTimerId) {
+    clearTimeout(_inactivityTimerId);
+    _inactivityTimerId = null;
+  }
+  // falls die Liste nicht offen ist, nichts tun
+  const filename = document.getElementById("filename")?.value.trim() || getFilenameFromUrl();
+  if (!filename) return;
+
+  _inactivityTimerId = setTimeout(() => {
+    stopPeriodicSync();
+    stopInactivityTimer();
+    try {
+      showStatus("Wegen Inaktivität: Zurück zur Listenübersicht", "change");
+    } catch (e) {}
+    setTimeout(() => {
+      window.location.href = window.location.origin + window.location.pathname;
+    }, 1200);
+  }, inactivityTimeoutMs);
+}
+
+function stopInactivityTimer() {
+  if (_inactivityTimerId) {
+    clearTimeout(_inactivityTimerId);
+    _inactivityTimerId = null;
+  }
+  if (_inactivityListenersAdded) {
+    _activityEvents.forEach((ev) => document.removeEventListener(ev, _activityHandler, { passive: true }));
+    _inactivityListenersAdded = false;
+  }
+}
+
 
 // ==========================================================
 //  Auth (register / login)
@@ -768,8 +950,29 @@ function editItem(button) {
     if (li.contains(input)) li.removeChild(input);
     li.removeEventListener("click", tempHandler, { capture: true });
     if (originalMoveHandler) li.addEventListener("click", originalMoveHandler);
-    button.disabled = false;
-    button.classList.remove("editing");
+    // Auf Touch-Geräten kann der Button nach Tap visuellen Hover/Active-Zustand behalten.
+    // Ersetze den Button durch einen geklonten Knoten, um diesen Zustand zuverlässig zu entfernen.
+    try {
+      if (touchscreen && button && button.parentElement) {
+        const newBtn = button.cloneNode(true);
+        button.parentElement.replaceChild(newBtn, button);
+        // Entferne mögliche Klassennamen / Fokus vom neuen Button
+        newBtn.classList.remove("editing");
+        newBtn.disabled = false;
+        newBtn.blur();
+        // kleiner Delay, damit mobile Browser den Active/Hover-Render aktualisieren
+        setTimeout(() => newBtn.blur(), 10);
+      } else {
+        button.disabled = false;
+        button.classList.remove("editing");
+        button.blur && button.blur();
+      }
+    } catch (e) {
+      // Falls etwas schiefgeht, wenigstens die ursprünglichen Einstellungen zurücksetzen
+      try { button.disabled = false; } catch (e) {}
+      try { button.classList.remove("editing"); } catch (e) {}
+      try { button.blur && button.blur(); } catch (e) {}
+    }
   }
 
   function saveInput(el) {
@@ -999,6 +1202,7 @@ function addItem() {
   const input = document.getElementById("newItem");
   const text = input.value.trim();
   if (!text) return;
+  const addBtn = document.getElementById("addItemBtn");
   
   const dropdown = document.getElementById("itemSearchDropdown");
   if (dropdown) dropdown.style.display = "none";
@@ -1022,6 +1226,24 @@ function addItem() {
     () => {
       input.value = "";
       loadList();
+
+      // Auf Touch-Geräten: Entferne möglichen Active/Hover-Zustand des Buttons.
+      // Clone-Replace stellt sicher, dass mobile Browser keine aktive Darstellung behalten.
+      try {
+        if (touchscreen && addBtn && addBtn.parentElement) {
+          const newBtn = addBtn.cloneNode(true);
+          addBtn.parentElement.replaceChild(newBtn, addBtn);
+          newBtn.addEventListener("click", addItem);
+          newBtn.classList.remove("editing");
+          newBtn.disabled = false;
+          newBtn.blur && newBtn.blur();
+          setTimeout(() => newBtn.blur && newBtn.blur(), 10);
+        } else {
+          addBtn && addBtn.blur && addBtn.blur();
+        }
+      } catch (e) {
+        try { addBtn && addBtn.blur && addBtn.blur(); } catch (e) {}
+      }
     },
     (error) => showStatus(`Fehler: ${error}`, "error")
   );
@@ -1075,6 +1297,8 @@ document.addEventListener("DOMContentLoaded", function () {
       if (listElements) listElements.style.display = "";
       if (listOverview) listOverview.style.display = "none";
       loadList();
+        // Inaktivitäts-Timer für geöffnete Liste starten
+        try { startInactivityTimer(); } catch (e) {}
       if (urlFilename === (typeof speiseplanName !== "undefined" ? speiseplanName : undefined)) {
         const newItem = document.getElementById("newItem");
         if (newItem) newItem.placeholder = "Es gibt ...";
@@ -1082,7 +1306,9 @@ document.addEventListener("DOMContentLoaded", function () {
     } else {
       if (listElements) listElements.style.display = "none";
       if (listOverview) listOverview.style.display = "";
-      fetchAllLists(showServerLists, function (error) {
+        // Falls wir in der Übersicht sind: Inaktivitäts-Timer stoppen
+        try { stopInactivityTimer(); } catch (e) {}
+        fetchAllLists(showServerLists, function (error) {
         showStatus("Fehler beim Laden der Listen: " + error, "error");
       });
     }
@@ -1101,6 +1327,8 @@ document.addEventListener("DOMContentLoaded", function () {
   const logoutBtn = document.getElementById("logoutBtn");
   if (logoutBtn) {
     logoutBtn.addEventListener("click", async () => {
+      // Stoppe Inaktivitäts-Timer vor Reload
+      try { stopInactivityTimer(); } catch (e) {}
       try {
         await cookieStore.delete("auth");
       } catch (e) {
@@ -1111,6 +1339,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   document.getElementById("backBtn")?.addEventListener("click", () => {
+    try { stopInactivityTimer(); } catch (e) {}
     window.location.href = window.location.origin + window.location.pathname;
   });
 

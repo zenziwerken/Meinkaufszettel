@@ -132,7 +132,7 @@ strong {
 
 #inactiveList.speiseplan li, li.speiseplan {
   margin: 10px 0;
-  padding: 0 8px;
+  padding: 0 4px 0 8px;
 }
 
 .itemText {
@@ -169,6 +169,14 @@ strong {
 background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23FFF' d='M14.69 10.82c0-.48-.41-.88-.88-.88-.48 0-.88.41-.88.88v6.49c0 .48.41.88.88.88.48 0 .88-.41.88-.88v-6.49zm-4.13 0c0-.48-.41-.88-.88-.88s-.88.41-.88.88v6.49c0 .48.41.88.88.88s.88-.41.88-.88v-6.49zm-5.9-2.65v11.21c0 1.29 1.07 2.36 2.36 2.36h9.44c1.29 0 2.36-1.07 2.36-2.36V8.17h-1.77v11.21c0 .33-.26.59-.59.59H7.02c-.33 0-.59-.26-.59-.59V8.17H4.66zm4.94-5.9c-.48 0-.92.29-1.11.77l-.58 1.59H4.37c-.48 0-.88.41-.88.88s.4.89.88.89h14.75c.47 0 .88-.41.88-.89s-.41-.88-.88-.88h-3.54l-.59-1.59c-.18-.48-.63-.77-1.11-.77H9.6z'/%3E%3C/svg%3E");
 }
 
+.deleteBtn:hover {
+  background-color: #dc3545;
+  transition: background-color 0.15s ease;
+}
+.editBtn:hover {
+  background-color: #218838;
+  transition: background-color 0.15s ease;
+}
 
 /* Edit-Button während des Editierens: Häkchen-Symbol */
 .editBtn.editing {
@@ -204,7 +212,7 @@ button {
   background-color: #8a8a8a;
   color: white;
   border: none;
-  border-radius: 3px;
+  border-radius: 5px;
   cursor: pointer;
 }
 
@@ -213,21 +221,26 @@ button:hover {
 }
 
 .status {
-  margin: 10px 0 20px;
-  padding: 10px;
-  border-radius: 3px;
-}
-
-.success {
-  background-color: #d4edda;
-  color: #155724;
-  border: 1px solid #c3e6cb;
+    position: fixed;
+    left: 0;
+    bottom: 0;
+    z-index: 9999;
+    font-weight: 500;
+    width: calc(100vw - 28px);
+    text-align: center;
+    margin: 0;
+    padding: 10px 14px;
+    pointer-events: auto;
 }
 
 .error {
-  background-color: #f8d7da;
-  color: #721c24;
-  border: 1px solid #f5c6cb;
+  background-color: #ec3645;
+  color: #ffffff;
+}
+
+.change {
+  background-color: #34b723;
+  color: #ffffff;
 }
 
 .close {
@@ -435,6 +448,11 @@ li.pending-active .undoBtn:hover {
     font-size: 1rem;
     min-width: 60px;
     height: 26px;
+  }
+
+  .status {
+    padding: 10px 12px;
+    width: calc(100vw - 24px);
   }
 }
 
