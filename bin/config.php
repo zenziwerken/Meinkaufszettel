@@ -1,6 +1,9 @@
 <?php
-// Erlaubtes Muster für Listennamen (Verzeichnis- und Dateinamen)
+// Erlaubtes Muster für Listennamen (Dateinamen innerhalb eines Benutzer-Verzeichnisses)
 $filenameMatch = '/^[a-zA-ZäöüÄÖÜß0-9_-~]+$/'; 
+
+// Erlaubtes Muster für Benutzernamen (Verzeichnisnamen unter data)
+$usernameMatch = '/^[a-zA-Z0-9_-]+$/';
 
 // Maximale Anzahl Einträge pro Liste
 $maxItemsPerList = 200;
@@ -19,14 +22,41 @@ $allowedOrigins = [
     'https://www.objective-view.de'
 ];
 
+$adminUsers = [
+    'Daniel',
+    'Barbara'
+];
+
 // Spezielle Einstellungen für Sonderfunktion des "Speiseplans"
 $speiseplanName = 'Speiseplan';
 $dayNames    = ["MO", "DI", "MI", "DO", "FR", "SA", "SO"];
 $colors      = [ "#ffc1ba", "#ffe1c7", "#fff2bf", "#c4f5cb", "#c2e6fd", "#f3d3ff", "#ffd6ea"];
 $colorBorder = [ "#e48176", "#f5b788", "#fce588", "#8de4a1", "#8cc9f0", "#e7a3f0", "#f4a9c9"];
 
-// --- Speicherorte ---
-$saveDir        = __DIR__ . '/../data'; 
-$passwordFile   = $saveDir . '/.password';
-$hashedPassword = trim(@file_get_contents($passwordFile) ?: '');
-$tokenDir       = $saveDir . '/tokens';
+// --- Speicherorte (Basis) ---
+$dataDirBase    = __DIR__ . '/../data'; 
+
+// Ein Verzeichnis für Einladungstokens (global)
+$invitesDir     = $dataDirBase . '/invites';
+
+// Ein Verzeichnis für Benutzerdaten (Passwörter, Einstellungen, ...)
+$usersDir       = $dataDirBase . '/user';
+
+// Ein Verzeichnis für geteilte Listen (global)
+$sharesDir      = $dataDirBase . '/shares'; 
+
+// Verzeichnis für Passwort-Reset-Tokens
+$resetsDir      = $dataDirBase . '/resets';
+
+// Ablaufzeit eines Reset-Tokens in Sekunden (Standard: 1 Stunde)
+$resetTokenExpiry = 3600;
+
+// --- Cleanup / Garbage-Collection Einstellungen (Tage) ---
+// Alte Benutzer-Token in Tagen (Standard: 60 Tage)
+$userTokenCleanupDays = 60;
+
+// Ungültige Reset-Dateien werden nach dieser Anzahl Tagen gelöscht (Standard: 30 Tage)
+$invalidResetKeepDays = 30;
+
+// Maximalalter für Challenge-Dateien in Tagen (Standard: 365 Tage ~ 1 Jahr)
+$challengeMaxAgeDays = 365;

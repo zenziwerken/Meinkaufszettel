@@ -19,7 +19,7 @@ function showStatus(message, type) {
         delete statusDiv._dismissTimer;
       }
     } catch (e) {
-      // ignore
+      // ignorieren
     }
 
     const clear = () => {
@@ -48,7 +48,7 @@ function showStatus(message, type) {
       statusDiv._dismissTimer = setTimeout(clear, 10000);
     }
   } catch (e) {
-    // Falls der Browser gewisse Eigenschaften nicht unterstützt, ignoriere silently
+    // Falls der Browser gewisse Eigenschaften nicht unterstützt, stillschweigend ignorieren
   }
 }
 
@@ -62,11 +62,20 @@ function replaceUnderscoresWithSpaces(text) {
 function getFilenameFromUrl() {
   const search = window.location.search;
   if (!search || search === "?") return "";
-  const searchStr = search.substring(1);
+  const raw = search.substring(1);
+  const parts = raw.split('&');
+  for (let p of parts) {
+    const kv = p.split('=');
+    const key = decodeURIComponent(kv[0] || '');
+    if (key === '') continue;
+    if (key === 'user') continue; // Benutzer-Parameter überspringen
+    return key;
+  }
+  // Fallback: gib die gesamte rohe Zeichenkette zurück
   try {
-    return decodeURIComponent(searchStr);
+    return decodeURIComponent(raw);
   } catch {
-    return searchStr;
+    return raw;
   }
 }
 
@@ -93,6 +102,7 @@ function saveListToServer(filename, activeItems, inactiveItems, onSuccess, onErr
       filename,
       active: activeItems,
       inactive: inactiveItems,
+        username: typeof username !== 'undefined' ? username : undefined,
     }),
   })
     .then((response) => response.json())
@@ -107,15 +117,25 @@ function fetchAllLists(onSuccess, onError) {
   fetch("bin/backend.php", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "list" }),
+    body: JSON.stringify({ action: "list", username: typeof username !== 'undefined' ? username : undefined }),
   })
-    .then((response) => {
-      if (!response.ok) throw new Error("Listen konnten nicht geladen werden");
-      return response.json();
+    .then(async (response) => {
+      let data = null;
+      try {
+        data = await response.json();
+      } catch (e) {
+        if (!response.ok) throw new Error("Serverfehler: " + response.status);
+        throw new Error("Ungültige Serverantwort beim Laden der Listen.");
+      }
+      if (!response.ok) {
+        const msg = data && (data.error || data.message) ? (data.error || data.message) : ("Serverfehler: " + response.status);
+        throw new Error(msg);
+      }
+      return data;
     })
     .then((data) => {
       if (Array.isArray(data)) onSuccess?.(data);
-      else onError?.(data.error || "Antwortformat ungültig");
+      else onError?.(data && (data.error || data.message) ? (data.error || data.message) : "Antwortformat ungültig");
     })
     .catch((error) => onError?.(error.message || error));
 }
@@ -126,19 +146,21 @@ function loadList() {
   fetch("bin/backend.php", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "load", id: filename }),
+    body: JSON.stringify({ action: "load", id: filename, username: typeof username !== 'undefined' ? username : undefined }),
   })
     .then(async (response) => {
-      if (!response.ok) {
-        throw new Error(`Serverfehler (${response.status}) beim Laden der Liste.`);
-      }
-      let data;
+      let data = null;
       try {
         data = await response.json();
-      } catch {
+      } catch (e) {
+        if (!response.ok) throw new Error(`Serverfehler (${response.status}) beim Laden der Liste.`);
         throw new Error("Ungültige Serverantwort – kein gültiges JSON erhalten.");
       }
-      if (data.success === false) {
+      if (!response.ok) {
+        const msg = data && (data.error || data.message) ? (data.error || data.message) : ('Serverfehler: ' + response.status);
+        throw new Error(msg);
+      }
+      if (data && data.success === false) {
         throw new Error(data.error || "Unbekannter Backend-Fehler.");
       }
 
@@ -170,6 +192,160 @@ function loadList() {
     });
 }
 
+/**
+ * Erzeugt ein Share-Token via Backend und zeigt das Ergebnis an.
+ * Kopiert, falls möglich, den Share-Link in die Zwischenablage.
+ */
+function shareListRequest(filename, listMeta) {
+  const payload = {
+    action: "share",
+    filename,
+    username: typeof username !== "undefined" ? username : undefined,
+  };
+
+  fetch("bin/backend.php", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  })
+    .then(async (response) => {
+      let data = null;
+      try {
+        data = await response.json();
+      } catch (e) {
+        throw new Error("Ungültige Serverantwort beim Erstellen des Share-Tokens.");
+      }
+      if (!response.ok) {
+        throw new Error(data && (data.error || data.message) ? (data.error || data.message) : ("Serverfehler: " + response.status));
+      }
+      return data;
+    })
+    .then((data) => {
+      if (!data || data.success === false) {
+        showStatus("Fehler beim Erstellen des Share-Tokens: " + (data && (data.error || data.message) ? (data.error || data.message) : "Unbekannter Fehler"), "error");
+        return;
+      }
+      const token = data.share;
+      if (!token) {
+        showStatus("Share-Token wurde nicht zurückgegeben.", "error");
+        return;
+      }
+
+      // Erzeuge eine nutzerfreundliche Share-URL (Empfänger kann Token an Backend senden)
+      const shareUrl = window.location.origin + window.location.pathname + "?share=" + encodeURIComponent(token);
+
+      // Versuche, die URL in die Zwischenablage zu kopieren
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(shareUrl).then(() => {
+          showStatus("Share-Link kopiert: " + shareUrl, "change");
+        }).catch(() => {
+          // Fallback: nur anzeigen
+          showStatus("Share-Link: " + shareUrl, "change");
+        });
+      } else {
+        // Kein Clipboard-Support -> anzeigen
+        showStatus("Share-Link: " + shareUrl, "change");
+      }
+
+      // Optional: Eingabeaufforderung anbieten (ältere Browser)
+      try {
+        if (!navigator.clipboard || !navigator.clipboard.writeText) {
+          // eslint-disable-next-line no-alert
+          alert("Share-Link:\n" + shareUrl + "\n\nBitte kopieren Sie diesen Link manuell.");
+        }
+      } catch (e) {}
+    })
+    .catch((err) => {
+      console.error("Fehler beim Erzeugen des Share-Tokens:", err);
+      showStatus("Fehler beim Erstellen des Share-Tokens", "error");
+    });
+}
+
+// Liest einen Query-Parameter aus der URL
+function getQueryParam(name) {
+  const params = new URLSearchParams(window.location.search);
+  return params.has(name) ? params.get(name) : null;
+}
+
+// Nimmt ein Share-Token entgegen, ruft das Backend auf und behandelt die Antwort.
+function acceptSharedToken(token) {
+  if (!token) return;
+
+  showStatus('Versuche, geteilte Liste zu übernehmen...', 'change');
+
+  fetch('bin/backend.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'shared', share: token, username: typeof username !== 'undefined' ? username : undefined }),
+  })
+    .then(async (response) => {
+      let data = null;
+      try {
+        data = await response.json();
+      } catch (e) {
+        throw new Error('Ungültige Serverantwort beim Übernehmen der Liste.');
+      }
+      if (!response.ok) {
+        // Backend verwendet sendError mit success=false, aber setzt oft 202; beide Fälle behandeln
+        const msg = (data && (data.error || data.message)) ? (data.error || data.message) : ('Serverfehler: ' + response.status);
+        throw new Error(msg);
+      }
+      return data;
+    })
+    .then((data) => {
+      if (!data || data.success === false) {
+        const msg = data && (data.error || data.message) ? (data.error || data.message) : 'Unbekannter Fehler';
+        showStatus('Fehler beim Übernehmen der Liste: ' + msg, 'error');
+        return;
+      }
+
+      const importedFilename = data.filename ? data.filename.replace(/\.json$/, '') : null;
+      showStatus('Liste übernommen' + (importedFilename ? ': ' + importedFilename : ''), 'change');
+
+      // Entferne 'share' aus der URL, damit ein erneutes Laden nicht nochmals importiert
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('share');
+        window.history.replaceState({}, document.title, url.toString());
+      } catch (e) {}
+
+      // UI: Wechsel in die Listen-Ansicht und lade die importierte Liste sofort
+      try {
+        const filenameEl = document.getElementById('filename');
+        if (filenameEl && importedFilename) filenameEl.value = importedFilename;
+
+        // Aktualisiere das sichtbare Listennamen-Element (falls serverseitig zunächst 'share' angezeigt wurde)
+        try {
+          const listNameEl = document.getElementById('listName');
+          if (listNameEl && importedFilename) {
+            listNameEl.textContent = replaceUnderscoresWithSpaces(importedFilename);
+          }
+        } catch (e) {}
+
+        const listElements = document.getElementById('listElements');
+        const listOverview = document.getElementById('listOverview');
+        if (listElements) listElements.style.display = '';
+        if (listOverview) listOverview.style.display = 'none';
+
+        // Starte Inaktivitäts-Timer für die geöffnete Liste
+        try { startInactivityTimer(); } catch (e) {}
+
+        // Lade die neue Liste
+        if (importedFilename) loadList();
+
+        // Aktualisiere die Listenübersicht im Hintergrund
+        try { fetchAllLists(showServerLists, () => {}); } catch (e) {}
+      } catch (e) {
+        // Ignoriere UI-Fehler
+      }
+    })
+    .catch((err) => {
+      console.error('Fehler beim Übernehmen des Shares:', err);
+      showStatus(err.message || 'Fehler beim Übernehmen der Liste', 'error');
+    });
+}
+
+
 // --- Periodische Synchronisation ---
 let _syncIntervalId = null;
 function stopPeriodicSync() {
@@ -182,7 +358,7 @@ function stopPeriodicSync() {
 function startPeriodicSync(filename) {
   stopPeriodicSync();
   if (!filename) return;
-  // initial delay before first sync: 60s
+  // Initiale Verzögerung bis zum ersten Sync: 60s
   _syncIntervalId = setInterval(() => syncNow(filename), syncInterval);
 }
 
@@ -200,15 +376,21 @@ function syncNow(filename) {
   fetch("bin/backend.php", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "sync", filename, active: activeItems, inactive: inactiveItems }),
+    body: JSON.stringify({ action: "sync", filename, active: activeItems, inactive: inactiveItems, username: typeof username !== 'undefined' ? username : undefined }),
   })
-    .then((response) => {
-      if (!response.ok) throw new Error(`Server antwortet nicht (${response.status})`);
-      return response.json();
-    })
-    .then((data) => {
+    .then(async (response) => {
+      let data = null;
+      try {
+        data = await response.json();
+      } catch (e) {
+        if (!response.ok) throw new Error(`Server antwortet nicht (${response.status})`);
+        throw new Error('Ungültige Serverantwort beim Sync.');
+      }
+      if (!response.ok) {
+        const msg = data && (data.error || data.message) ? (data.error || data.message) : ('Server antwortet nicht (' + response.status + ')');
+        throw new Error(msg);
+      }
       if (!data || data.success === false) {
-        // Backend kann false zurückgeben; wir melden kurz und beenden
         const msg = data && data.error ? data.error : 'Unbekannter Backend-Fehler beim Sync.';
         showStatus(`Fehler bei Sync: ${msg}`, "error");
         return;
@@ -234,7 +416,26 @@ function syncNow(filename) {
           data.active.forEach((item) => ulActive.appendChild(createActiveItem(item)));
           data.inactive.forEach((item) => ulInactive.appendChild(createInactiveItem(item)));
           sortInactiveList();
-          showStatus("Änderung durch anderen Benutzer", "change");
+          // Bevorzuge serverseitige Nachricht (kann Benutzernamen enthalten), ansonsten auf
+          // `changedBy` oder eine generische Meldung zurückgreifen
+          try {
+            const listNameReadable = typeof filename === 'string' ? replaceUnderscoresWithSpaces(filename) : filename;
+            let statusMsg = "Änderung durch anderen Benutzer";
+            let shouldShow = true;
+            if (data && data.changedBy) {
+              // Keine Nachricht anzeigen, wenn die Änderung vom aktuellen Benutzer stammt
+              if (typeof username !== 'undefined' && data.changedBy === username) {
+                shouldShow = false;
+              } else {
+                statusMsg = `${data.changedBy} hat die Liste '${listNameReadable}' geändert.`;
+              }
+            } else if (data && data.message) {
+              statusMsg = String(data.message);
+            }
+            if (shouldShow) showStatus(statusMsg, "change");
+          } catch (e) {
+            showStatus("Änderung durch anderen Benutzer", "change");
+          }
         }
       } 
     })
@@ -317,22 +518,48 @@ function register() {
     return;
   }
 
+  const regUsername = document.getElementById('registerUsername')?.value?.trim();
+  const regEmail = document.getElementById('registerEmail')?.value?.trim();
   fetch("bin/backend.php", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "register", password: passCode }),
+    body: JSON.stringify({
+      action: "register",
+      password: passCode,
+      username: regUsername || undefined,
+      email: regEmail || undefined,
+      invite: (typeof inviteToken !== 'undefined' && inviteToken)
+        ? inviteToken
+        : (document.getElementById('inviteInput')?.value?.trim() || undefined),
+    }),
   })
-    .then((response) =>
-      response.json().then((data) => {
-        if (!response.ok) throw { status: response.status, message: data.error || "Unbekannter Serverfehler" };
-        return data;
-      })
-    )
-    .then((data) => {
-      if (data.success) location.reload();
-      else showStatus(data.message || "Falsches Passwort.", "error");
+    .then(async (response) => {
+      let data = null;
+      try {
+        data = await response.json();
+      } catch (e) {
+        console.error('Ungültige JSON-Antwort vom Server beim Register:', e, response);
+        throw { status: response.status, message: 'Ungültige Serverantwort' };
+      }
+      if (!response.ok) {
+        console.error('Register fehlgeschlagen, Server-Response:', response.status, data);
+        throw { status: response.status, message: data.error || data.message || JSON.stringify(data) };
+      }
+      return data;
     })
-    .catch((error) => showStatus(error.message || "Fehler beim Login: " + error, "error"));
+    .then((data) => {
+      if (data.success) {
+        //alert('Registrierung erfolgreich! Du wirst nun eingeloggt.');
+        window.location.href = window.location.pathname;
+      } else {
+        console.error('Register returned success=false:', data);
+        showStatus(data.error || data.message || JSON.stringify(data) || 'Falsches Passwort.', 'error');
+      }
+    })
+    .catch((error) => {
+      console.error('Fehler bei Register:', error);
+      showStatus(error.message || error || 'Fehler beim Registrieren', 'error');
+    });
 }
 
 function login() {
@@ -342,10 +569,13 @@ function login() {
     return;
   }
 
+  const inputUsername = document.getElementById('loginUsername')?.value?.trim();
+  const payloadUsername = inputUsername && inputUsername.length ? inputUsername : (typeof username !== 'undefined' ? username : undefined);
+
   fetch("bin/backend.php", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "login", password: passCode }),
+    body: JSON.stringify({ action: "login", password: passCode, username: payloadUsername }),
   })
     .then((response) =>
       response.json().then((data) => {
@@ -358,6 +588,9 @@ function login() {
         document.getElementById("login").style.display = "none";
         document.getElementById("listElements").style.display = "none";
         document.getElementById("listOverview").style.display = "";
+        
+        // Benutzerüberschrift wird serverseitig gesetzt; kein JS nötig.
+
         setTimeout(() => {
           fetchAllLists(showServerLists, (error) => showStatus("Fehler beim Laden der Listen: " + error, "error"));
         }, 100);
@@ -373,11 +606,33 @@ function login() {
 // ==========================================================
 function createActiveItem(text) {
   const li = document.createElement("li");
-  li.innerHTML = `
-    <span class="dragHandle" draggable="true" title="Verschieben"></span>
-    <span class="itemText">${text}</span>
-    <button class="editBtn" title="Umbenennen" onclick="editItem(this)"></button>
-  `;
+  // Erzeuge Elemente sicher (vermeide innerHTML mit nicht vertrauenswürdigen Inhalten)
+  const dragHandle = document.createElement('span');
+  dragHandle.className = 'dragHandle';
+  dragHandle.title = 'Verschieben';
+  dragHandle.setAttribute('draggable', 'true');
+
+  const spanText = document.createElement('span');
+  spanText.className = 'itemText';
+  spanText.textContent = String(text ?? '');
+
+  const editBtn = document.createElement('button');
+  editBtn.className = 'editBtn';
+  editBtn.title = 'Umbenennen';
+  editBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    try { editItem(this); } catch (err) { console.error(err); }
+  });
+
+  li.appendChild(dragHandle);
+  li.appendChild(spanText);
+  li.appendChild(editBtn);
+  // Markiere Items, die mit '!' enden, weiterhin mit einer CSS-Klasse
+  try {
+    const trimmed = String(text || '').trim();
+    if (trimmed.endsWith('!')) li.classList.add('has-exclamation');
+    if (trimmed.endsWith('?')) li.classList.add('has-question');
+  } catch (e) { /* ignorieren */ }
 
   function updateDraggableState() {
     const itemList = document.getElementById("itemList");
@@ -415,15 +670,28 @@ function createActiveItem(text) {
 }
 
 function createInactiveItem(text) {
-  const li = document.createElement("li");
-  li.innerHTML = `
-    <span class="itemText">${text}</span>
-    <button class="deleteBtn" title="Löschen" onclick="deleteInactiveItem(this)"></button>
-  `;
-  li.addEventListener("click", function (e) {
-    if (e.target.classList.contains("deleteBtn") || e.target.closest("button")) return;
+  const li = document.createElement('li');
+
+  const spanText = document.createElement('span');
+  spanText.className = 'itemText';
+  spanText.textContent = String(text ?? '');
+
+  const deleteBtn = document.createElement('button');
+  deleteBtn.className = 'deleteBtn';
+  deleteBtn.title = 'Löschen';
+  deleteBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    try { deleteInactiveItem(this); } catch (err) { console.error(err); }
+  });
+
+  li.appendChild(spanText);
+  li.appendChild(deleteBtn);
+
+  li.addEventListener('click', function (e) {
+    if (e.target.classList.contains('deleteBtn') || e.target.closest('button')) return;
     moveToActive(li);
   });
+
   return li;
 }
 
@@ -545,11 +813,11 @@ function setupDragAndDrop() {
       if (handle && li && e.target.classList.contains("dragHandle")) {
         draggedLi = li;
         draggedLi.classList.add("dragging");
-        // Drag preview
+        // Drag-Vorschau
         try {
           e.dataTransfer.setDragImage(li, li.offsetWidth / 2, li.offsetHeight / 2);
         } catch (err) {
-          // some browsers restrict setDragImage
+          // einige Browser schränken setDragImage ein
         }
         setTimeout(() => (draggedLi.style.display = "none"), 0);
       } else {
@@ -672,7 +940,7 @@ function updateActiveOrder() {
     activeItems,
     inactiveItems,
     function () {
-      // no-op on success
+      // keine Aktion bei Erfolg
     },
     function (error) {
       showStatus("Fehler beim Speichern der Reihenfolge: " + error, "error");
@@ -701,8 +969,10 @@ function moveToInactive(li) {
   if (li._undoTimer) return;
 
   const text = li.querySelector(".itemText").textContent.trim();
+  // Entferne abschließendes '!' oder '?' wenn das Item inaktiv wird
+  const stripped = String(text).replace(/[!?]+$/, '').trim();
 
-  // UI: Zeige Undo-Button am aktiven Element und markiere als "pending"
+  // UI: Zeige Rückgängig-Schaltfläche am aktiven Element und markiere als "pending"
   const undoBtn = document.createElement("button");
   undoBtn.className = "undoBtn";
   undoBtn.title = "Rückgängig";
@@ -724,7 +994,7 @@ function moveToInactive(li) {
   );
 
   const newActiveItems = activeItems.filter((item) => item !== text);
-  const newInactiveItems = [...new Set([...inactiveItems, text])];
+  const newInactiveItems = [...new Set([...inactiveItems, stripped])];
 
   let filename = document.getElementById("filename")?.value.trim();
   if (!filename) filename = getFilenameFromUrl() || "liste";
@@ -742,7 +1012,7 @@ function moveToInactive(li) {
       function () {
         // Beim Erfolg: aktives li entfernen (falls noch vorhanden) und inaktives Element anfügen
         if (li.parentElement) li.parentElement.removeChild(li);
-        const finalLi = createInactiveItem(text);
+        const finalLi = createInactiveItem(stripped);
         document.getElementById("inactiveList")?.appendChild(finalLi);
         sortInactiveList();
         updateActiveOrder();
@@ -753,9 +1023,9 @@ function moveToInactive(li) {
         // Falls Element bereits entfernt wurde, füge ein neues Active-Element hinzu
         if (!document.querySelector(`#itemList li .itemText`) || !Array.from(document.querySelectorAll("#itemList li")).some(l => l.querySelector(".itemText").textContent.trim() === text)) {
           const restoredLi = createActiveItem(text);
-          document.getElementById("itemList")?.appendChild(restoredLi);
+          document.getElementById("itemList")?.prepend(restoredLi);
         } else {
-          // Falls das ursprüngliche Element noch vorhanden: entferne pending-Markierung und Button
+          // Falls das ursprüngliche Element noch vorhanden ist: entferne pending-Markierung und die Schaltfläche
           if (li) {
             li.classList.remove("pending-active");
             if (undoBtn.parentElement === li) li.removeChild(undoBtn);
@@ -769,14 +1039,14 @@ function moveToInactive(li) {
     delete li._undoTimer;
   }, 5000);
 
-  // Undo-Handler: innerhalb der 5s Rückgängig machen (kein Server-Call)
+  // Rückgängig-Handler: innerhalb der 5s Rückgängig machen (kein Server-Call)
   undoBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     if (li._undoTimer) {
       clearTimeout(li._undoTimer);
       delete li._undoTimer;
     }
-    // Entferne UI-Pending-Markierung und Undo-Button
+    // Entferne UI-Pending-Markierung und die Rückgängig-Schaltfläche
     li.classList.remove("pending-active");
     if (undoBtn.parentElement === li) li.removeChild(undoBtn);
     // Keine Server-Änderung nötig — Reihenfolge ggf. neu speichern
@@ -805,7 +1075,7 @@ function moveToActive(li) {
     newInactiveItems,
     function () {
       const activeLi = createActiveItem(text);
-      document.getElementById("itemList")?.appendChild(activeLi);
+      document.getElementById("itemList")?.prepend(activeLi);
       if (li.parentElement) li.parentElement.removeChild(li);
       sortInactiveList();
     },
@@ -824,7 +1094,7 @@ function deleteInactiveItem(button) {
 
   const text = li.querySelector(".itemText").textContent.trim();
 
-  // UI: Zeige Undo-Button am inaktiven Element und markiere als "pending"
+  // UI: Zeige Rückgängig-Schaltfläche am inaktiven Element und markiere als "pending"
   const undoBtn = document.createElement("button");
   undoBtn.className = "undoBtn";
   undoBtn.title = "Rückgängig";
@@ -890,14 +1160,14 @@ function deleteInactiveItem(button) {
     delete li._undoTimer;
   }, 5000);
 
-  // Undo-Handler: innerhalb der 5s Rückgängig machen (kein Server-Call)
+  // Rückgängig-Handler: innerhalb der 5s Rückgängig machen (kein Server-Call)
   undoBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     if (li._undoTimer) {
       clearTimeout(li._undoTimer);
       delete li._undoTimer;
     }
-    // Entferne UI-Pending-Markierung und Undo-Button
+    // Entferne UI-Pending-Markierung und die Rückgängig-Schaltfläche
     li.classList.remove("pending-active");
     if (undoBtn.parentElement === li) li.removeChild(undoBtn);
     // Keine Server-Änderung nötig
@@ -950,18 +1220,23 @@ function editItem(button) {
     if (li.contains(input)) li.removeChild(input);
     li.removeEventListener("click", tempHandler, { capture: true });
     if (originalMoveHandler) li.addEventListener("click", originalMoveHandler);
-    // Auf Touch-Geräten kann der Button nach Tap visuellen Hover/Active-Zustand behalten.
-    // Ersetze den Button durch einen geklonten Knoten, um diesen Zustand zuverlässig zu entfernen.
+    // Auf Touch-Geräten kann die Schaltfläche nach Tap einen visuellen Hover-/Active-Zustand behalten.
+    // Ersetze die Schaltfläche durch einen geklonten Knoten, um diesen Zustand zuverlässig zu entfernen.
     try {
       if (touchscreen && button && button.parentElement) {
         const newBtn = button.cloneNode(true);
+        // Stelle sicher, dass der Klick-Handler wieder angebracht wird (cloneNode kopiert keine Listener)
+        newBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          try { editItem(this); } catch (err) { console.error(err); }
+        });
         button.parentElement.replaceChild(newBtn, button);
-        // Entferne mögliche Klassennamen / Fokus vom neuen Button
+        // Entferne mögliche Klassennamen / Fokus von der neuen Schaltfläche
         newBtn.classList.remove("editing");
         newBtn.disabled = false;
-        newBtn.blur();
+        newBtn.blur && newBtn.blur();
         // kleiner Delay, damit mobile Browser den Active/Hover-Render aktualisieren
-        setTimeout(() => newBtn.blur(), 10);
+        setTimeout(() => newBtn.blur && newBtn.blur(), 10);
       } else {
         button.disabled = false;
         button.classList.remove("editing");
@@ -1001,7 +1276,18 @@ function editItem(button) {
       activeItems,
       inactiveItems,
       function () {
-        span.textContent = newText;
+          try {
+            const nt = String(newText || '').trim();
+            span.textContent = nt;
+            try {
+              if (nt.endsWith('!')) li.classList.add('has-exclamation');
+              else li.classList.remove('has-exclamation');
+              if (nt.endsWith('?')) li.classList.add('has-question');
+              else li.classList.remove('has-question');
+            } catch (e) { /* ignorieren */ }
+          } catch (e) {
+            span.textContent = newText;
+          }
       },
       function (error) {
         showStatus(`Fehler: ${error}`, "error");
@@ -1039,42 +1325,95 @@ function showServerLists(lists) {
   if (!ul) return;
   ul.innerHTML = "";
   if (!lists.length) {
-    ul.innerHTML = "<li>Keine Listen gefunden.</li>";
+    // Freundliche Anzeige für Erstbenutzer: Hervorgehobener Eintrag mit Handlungsaufforderung
+    ul.innerHTML = `
+      <li class="empty-list">
+        <div class="empty-list-inner">
+          <strong>Noch keine Liste angelegt</strong>
+          <div class="empty-list-hint">Erstelle deine erste Liste indem du 'Ich gehe zu ...' ausfüllst und 'Hinzufügen' klickst.</div>
+        </div>
+      </li>
+    `;
     return;
   }
 
   lists.forEach((list) => {
     const li = document.createElement("li");
     let entryText = "";
-    if (list.itemCount === 1) entryText = "1&nbsp;Eintrag";
-    else if (list.itemCount > 1) entryText = list.itemCount + "&nbsp;Einträge";
+    if (list.itemCount === 1) entryText = "1\u00A0Eintrag";
+    else if (list.itemCount > 1) entryText = list.itemCount + "\u00A0Einträge";
 
     if (list.itemCount === 0) li.classList.add("empty");
 
-    const entryFilename = replaceUnderscoresWithSpaces(list.filename.replace(".json", ""));
-    li.innerHTML = `
-      <span class="itemText">
-        <strong class="listFileName">${entryFilename}</strong>
-        <span class="modified">(${entryText ? entryText + ", " + list.lastModified : list.lastModified})</span>
-      </span>
-      <button class="editBtn" title="Umbenennen" onclick="editListItem(this)"></button>
-      <button class="deleteBtn" title="Liste löschen"></button>
-    `;
+    const entryFilename = replaceUnderscoresWithSpaces(list.filename.replace('.json', ''));
 
+    // Erzeuge sicheren DOM-Baum statt innerHTML (vermeidet XSS)
+    li.innerHTML = ''; // leeren
+
+    const spanItemText = document.createElement('span');
+    spanItemText.className = 'itemText';
+
+    const strongName = document.createElement('strong');
+    strongName.className = 'listFileName';
+    strongName.textContent = entryFilename;
+    spanItemText.appendChild(strongName);
+
+    const spanModified = document.createElement('span');
+    spanModified.className = 'modified';
+    // Sicherstellen, dass vom Server HTML-kodierte geschützte Leerzeichen
+    // in echte NBSP-Zeichen konvertiert werden, damit die Anzeige korrekt ist
+    const lastModifiedRaw = String(list.lastModified || '');
+    const lastModified = lastModifiedRaw.replace(/&nbsp;/g, '\u00A0');
+    const modText = ' (' + (entryText ? (entryText + ', ' + lastModified) : lastModified) + ')';
+    spanModified.textContent = modText;
+    spanItemText.appendChild(spanModified);
+
+    const shareBtn = document.createElement('button');
+    shareBtn.className = 'shareBtn';
+    shareBtn.title = 'Teilen';
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 'editBtn';
+    editBtn.title = 'Umbenennen';
+    editBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      try { editListItem(this); } catch (err) { console.error(err); }
+    });
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'deleteBtn';
+    deleteBtn.title = 'Liste löschen';
+
+    li.appendChild(spanItemText);
+    li.appendChild(shareBtn);
+    li.appendChild(editBtn);
+    li.appendChild(deleteBtn);
+
+    // Teilen-Schaltfläche: Eventlistener ergänzen (verwende Closure für `list`)
+    const shareBtnEl = li.querySelector(".shareBtn");
+    if (shareBtnEl) {
+      shareBtnEl.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const filenameNoExt = list.filename.replace(".json", "");
+        shareListRequest(filenameNoExt, list);
+      });
+    }
+    
     // Klick auf Listennamen: Liste laden / wechseln
     li.querySelector(".itemText").addEventListener("click", function (e) {
+      // Navigation nur über Listennamen; Session hält den angemeldeten Benutzer serverseitig.
       window.location.href = "?" + encodeURIComponent(list.filename.replace(".json", ""));
       e.stopPropagation();
     });
 
-    // Löschen-Button
+    // Schaltfläche zum Löschen
     li.querySelector(".deleteBtn").addEventListener("click", function (e) {
       e.stopPropagation();
       if (!confirm("Möchten Sie die Liste wirklich löschen?")) return;
       fetch("bin/backend.php", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "delete", filename: list.filename.replace(".json", "") }),
+        body: JSON.stringify({ action: "delete", filename: list.filename.replace(".json", ""), username: typeof username !== 'undefined' ? username : undefined }),
       })
         .then((response) => response.json())
         .then((data) => {
@@ -1157,6 +1496,7 @@ function editListItem(button) {
           action: "rename",
           oldFilename: replaceSpacesWithUnderscores(oldText),
           newFilename: newFilename,
+          username: typeof username !== 'undefined' ? username : undefined,
         }),
       })
         .then((response) => response.json())
@@ -1259,7 +1599,7 @@ function addListItem() {
   fetch("bin/backend.php", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "create", filename: text }),
+    body: JSON.stringify({ action: "create", filename: text, username: typeof username !== 'undefined' ? username : undefined }),
   })
     .then((response) => response.json())
     .then((data) => {
@@ -1281,17 +1621,59 @@ function addListItem() {
 //  Initialisierung bei DOMContentLoaded
 // ==========================================================
 document.addEventListener("DOMContentLoaded", function () {
-  const urlFilename = getFilenameFromUrl();
+  let urlFilename = getFilenameFromUrl();
+  // Wenn die URL ein Share-Token enthält, darf die Key-Parsing-Funktion
+  // nicht fälschlich 'share' als Listennamen zurückgeben. Unterdrücke
+  // daher das automatische Laden einer Liste, falls ?share=... gesetzt ist.
+  try {
+    const _shareToken = getQueryParam('share');
+    if (_shareToken) urlFilename = '';
+  } catch (e) {}
   const listElements = document.getElementById("listElements");
   const listOverview = document.getElementById("listOverview");
   const loginDiv = document.getElementById("login");
 
   function isAuthenticated() {
-    return document.cookie.split(";").some((c) => c.trim().startsWith("auth="));
+    // Der Server setzt ein nicht-HTTP-only `username`-Cookie zusammen mit einem HTTP-only `token`.
+    // Da `token` HTTP-only ist und clientseitig nicht lesbar, prüfen wir auf `username=`.
+    return document.cookie.split(";").some((c) => c.trim().startsWith("username="));
   }
 
   if (isAuthenticated()) {
     if (loginDiv) loginDiv.style.display = "none";
+
+    // Setze die Überschrift der Übersichtsseite auf "<Benutzer>s Zettel" (z.B. "Daniels Zettel").
+    try {
+      const userHeading = document.getElementById('userNamesZettel');
+      if (userHeading) {
+        // Versuche serverseitig injizierten `username` zu verwenden,
+        // andernfalls Fallback auf das clientseitige `username`-Cookie.
+        let uname = null;
+          try { if (typeof username !== 'undefined' && username) uname = String(username); } catch (e) {}
+
+        if (!uname) {
+          try {
+            const m = document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith('username='));
+            if (m) {
+              const v = m.substring('username='.length);
+              try { uname = decodeURIComponent(v); } catch (e) { uname = v; }
+              if (uname === 'undefined' || uname === '') uname = null;
+            }
+          } catch (e) { /* ignorieren */ }
+        }
+
+        if (uname) {
+          // Wenn der Name auf 's', 'x' oder 'z' endet, nutze die Form mit Apostroph: "Markus' Zettel"
+          if (uname.endsWith('s') || uname.endsWith('x') || uname.endsWith('z')) {
+            userHeading.textContent = uname + "' Zettel";
+          } else {
+            userHeading.textContent = uname + 's Zettel';
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Konnte Benutzerüberschrift nicht setzen', e);
+    }
 
     if (urlFilename) {
       if (listElements) listElements.style.display = "";
@@ -1324,18 +1706,34 @@ document.addEventListener("DOMContentLoaded", function () {
   document.getElementById("addListItemBtn")?.addEventListener("click", addListItem);
   document.getElementById("addItemBtn")?.addEventListener("click", addItem);
 
-  const logoutBtn = document.getElementById("logoutBtn");
-  if (logoutBtn) {
-    logoutBtn.addEventListener("click", async () => {
-      // Stoppe Inaktivitäts-Timer vor Reload
-      try { stopInactivityTimer(); } catch (e) {}
-      try {
-        await cookieStore.delete("auth");
-      } catch (e) {
-        console.warn("Fehler beim Löschen des Cookies:", e);
+  // Logout-Funktion (wird vom Menü aufgerufen)
+  async function doLogout() {
+    try { stopInactivityTimer(); } catch (e) {}
+    try {
+      await fetch("bin/backend.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "logout" }),
+        credentials: "same-origin",
+      });
+    } catch (e) {
+      console.warn("Logout-Request fehlgeschlagen:", e);
+    }
+    try {
+      if (window.cookieStore && cookieStore.delete) {
+        await cookieStore.delete("username");
+        await cookieStore.delete("token");
       }
-      location.reload();
-    });
+    } catch (e) {
+      console.warn("CookieStore.delete fehlgeschlagen:", e);
+    }
+    try {
+      document.cookie = "username=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+      document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    } catch (e) {
+      console.warn("Clientseitiges Löschen der Cookies fehlgeschlagen:", e);
+    }
+    location.reload();
   }
 
   document.getElementById("backBtn")?.addEventListener("click", () => {
@@ -1363,8 +1761,359 @@ document.addEventListener("DOMContentLoaded", function () {
   setupItemSearch();
   setupDragAndDrop();
 
+  // Wenn ein Share-Token in der URL ist, übernehmen
+  try {
+    const shareToken = getQueryParam('share');
+    if (shareToken) {
+      // Kleiner Delay, damit UI-Elemente initialisiert sind
+      setTimeout(() => acceptSharedToken(shareToken), 200);
+    }
+  } catch (e) {}
+
   // Zusätzliche Enter-Listener (falls Funktion separat aufgerufen wird)
   setupEnterKeyListener("newItem", addItem);
   setupEnterKeyListener("newListItem", addListItem);
   setupEnterKeyListener("passCode", login);
+
+  // --- Modal-Fokus & Barrierefreiheits-Hilfen ---
+  function _getFocusable(modal) {
+    return Array.from(modal.querySelectorAll('a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])')).filter(el => el.offsetParent !== null);
+  }
+
+  function _openModal(modalId, firstSelector) {
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+    // Speichere zuvor fokussiertes Element
+    modal._previousActive = document.activeElement;
+    modal.style.display = 'flex';
+    modal.setAttribute('aria-hidden', 'false');
+    modal.setAttribute('aria-modal', 'true');
+
+    // Fokus auf erstes Feld setzen (oder erstes fokussierbares Element)
+    let target = null;
+    try { target = firstSelector ? modal.querySelector(firstSelector) : null; } catch (e) { target = null; }
+    if (!target) {
+      const list = _getFocusable(modal);
+      target = list.length ? list[0] : null;
+    }
+    try { target && target.focus(); } catch (e) {}
+
+    // Keydown-Handler: Esc zum Schließen, Tab-Fokus innerhalb des Modals einkapseln
+    modal._keydownHandler = function (e) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        _closeModal(modalId);
+        return;
+      }
+      if (e.key === 'Tab') {
+        const focusable = _getFocusable(modal);
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault(); last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault(); first.focus();
+        }
+      }
+    };
+    document.addEventListener('keydown', modal._keydownHandler);
+  }
+
+  function _closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+    modal.style.display = 'none';
+    modal.setAttribute('aria-hidden', 'true');
+    modal.setAttribute('aria-modal', 'false');
+
+    // Eingabefelder innerhalb des Modals leeren
+    try {
+      const inputs = modal.querySelectorAll('input');
+      inputs.forEach(i => { if (i.type === 'password' || i.type === 'text') i.value = ''; });
+    } catch (e) {}
+
+    // Key-Handler entfernen und Fokus wiederherstellen
+    try {
+      if (modal._keydownHandler) document.removeEventListener('keydown', modal._keydownHandler);
+      if (modal._previousActive && typeof modal._previousActive.focus === 'function') modal._previousActive.focus();
+    } catch (e) {}
+  }
+
+  // --- Modal 'Passwort ändern': öffnen / schließen / senden ---
+  function openChangePasswordModal() { _openModal('changePasswordModal', '#currentPassword'); }
+  function closeChangePasswordModal() { _closeModal('changePasswordModal'); }
+
+  async function changePassword() {
+    const cur = document.getElementById('currentPassword')?.value || '';
+    const nw = document.getElementById('newPassword')?.value || '';
+    const conf = document.getElementById('newPasswordConfirm')?.value || '';
+
+    if (!cur || !nw || !conf) return showStatus('Bitte alle Felder ausfüllen.', 'error');
+    if (nw.length < 6) return showStatus('Neues Passwort zu kurz (mind. 6 Zeichen).', 'error');
+    if (nw !== conf) return showStatus('Neues Passwort und Bestätigung stimmen nicht überein.', 'error');
+
+    try {
+      const resp = await fetch('bin/backend.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'change_password', currentPassword: cur, newPassword: nw, username: typeof username !== 'undefined' ? username : undefined }),
+      });
+      let data = null;
+      try { data = await resp.json(); } catch (e) { /* ignorieren */ }
+      if (!resp.ok) {
+        const msg = data && (data.error || data.message) ? (data.error || data.message) : ('Serverfehler: ' + resp.status);
+        throw new Error(msg);
+      }
+      if (!data || data.success === false) {
+        throw new Error(data && (data.error || data.message) ? (data.error || data.message) : 'Fehler beim Ändern des Passworts.');
+      }
+
+      showStatus('Passwort geändert. Bitte melde dich neu an.', 'change');
+      closeChangePasswordModal();
+      setTimeout(() => { location.reload(); }, 1400);
+    } catch (err) {
+      console.error('Fehler beim Passwortwechsel:', err);
+      showStatus(err.message || 'Fehler beim Passwortwechsel', 'error');
+    }
+  }
+
+  // Drei-Punkte-Schaltfläche: schaltet das Dropdown-Menü um
+  const moreBtn = document.getElementById('moreBtn');
+  const moreMenu = document.getElementById('moreMenu');
+  function closeMoreMenu() {
+    if (!moreMenu) return;
+    moreMenu.style.display = 'none';
+    moreMenu.setAttribute('aria-hidden', 'true');
+  }
+  function openMoreMenu() {
+    if (!moreMenu) return;
+    moreMenu.style.display = 'block';
+    moreMenu.setAttribute('aria-hidden', 'false');
+  }
+  if (moreBtn && moreMenu) {
+    moreBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (moreMenu.style.display === 'block') closeMoreMenu(); else openMoreMenu();
+    });
+    // Klick außerhalb schließt das Menü
+    document.addEventListener('click', (e) => {
+      if (!moreMenu) return;
+      const target = e.target;
+      if (target === moreBtn || moreBtn.contains(target) || moreMenu.contains(target)) return;
+      closeMoreMenu();
+    });
+
+      // Menüeinträge binden
+    document.getElementById('menuChangePassword')?.addEventListener('click', (e) => {
+      e.stopPropagation(); closeMoreMenu(); openChangePasswordModal();
+    });
+    document.getElementById('menuChangeUsername')?.addEventListener('click', (e) => {
+      e.stopPropagation(); closeMoreMenu(); openChangeUsernameModal();
+    });
+    document.getElementById('menuCreateInvite')?.addEventListener('click', (e) => {
+      e.stopPropagation(); closeMoreMenu(); createInvite();
+    });
+    document.getElementById('menuShowHelp')?.addEventListener('click', (e) => {
+      e.stopPropagation(); closeMoreMenu(); openHelp();
+    });
+    document.getElementById('menuChangeEMail')?.addEventListener('click', (e) => {
+      e.stopPropagation(); closeMoreMenu(); openChangeEmailModal();
+    });
+    document.getElementById('menuLogout')?.addEventListener('click', (e) => {
+      e.stopPropagation(); closeMoreMenu(); doLogout();
+    });
+  }
+
+  // Modal-Buttons
+  document.getElementById('closeChangePwd')?.addEventListener('click', () => closeChangePasswordModal());
+  document.getElementById('cancelChangePasswordBtn')?.addEventListener('click', () => closeChangePasswordModal());
+  document.getElementById('changePasswordBtn')?.addEventListener('click', () => changePassword());
+
+  // --- Modal 'Benutzername ändern': öffnen / schließen / senden ---
+  function openChangeUsernameModal() { _openModal('changeUsernameModal', '#newUsername'); }
+  function closeChangeUsernameModal() { _closeModal('changeUsernameModal'); }
+
+  // --- Modal 'E-Mail ändern': öffnen / schließen ---
+  function openChangeEmailModal() { _openModal('changeEmailModal', '#newEmail'); }
+  function closeChangeEmailModal() { _closeModal('changeEmailModal'); }
+
+  // --- Hilfe-Overlay: öffnen / schließen ---
+  function openHelp() {
+    const help = document.getElementById('helpTexts');
+    const closeBtn = document.getElementById('helpCloseBtn');
+    if (!help) return;
+    try { help.setAttribute('aria-hidden', 'false'); } catch (e) {}
+    try { document.body.style.overflow = 'hidden'; } catch (e) {}
+    try { if (closeBtn) closeBtn.focus(); } catch (e) {}
+    document.addEventListener('keydown', _helpKeyHandler);
+  }
+
+  function closeHelp() {
+    const help = document.getElementById('helpTexts');
+    if (!help) return;
+    try { help.setAttribute('aria-hidden', 'true'); } catch (e) {}
+    try { document.body.style.overflow = ''; } catch (e) {}
+    document.removeEventListener('keydown', _helpKeyHandler);
+  }
+
+  function _helpKeyHandler(e) {
+    if (e.key === 'Escape') {
+      try { closeHelp(); } catch (err) {}
+    }
+  }
+
+  // Klick auf Hintergrund des Overlays schließt die Hilfe
+  try {
+    const helpRoot = document.getElementById('helpTexts');
+    if (helpRoot) helpRoot.addEventListener('click', function (e) {
+      if (e.target === helpRoot) closeHelp();
+    });
+    const helpClose = document.getElementById('helpCloseBtn');
+    if (helpClose) helpClose.addEventListener('click', function (e) { e.stopPropagation(); closeHelp(); });
+  } catch (e) {}
+
+  // Einladung erstellen: kein Modal — Invite erzeugen und Link in die Zwischenablage kopieren
+  async function createInvite() {
+    try {
+      const resp = await fetch('bin/backend.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create_invite' }),
+      });
+      let data = null; try { data = await resp.json(); } catch (e) { data = null; }
+      if (!resp.ok) {
+        const msg = data && (data.error || data.message) ? (data.error || data.message) : ('Serverfehler: ' + resp.status);
+        throw new Error(msg);
+      }
+      if (!data || data.success === false) throw new Error(data && (data.error || data.message) ? (data.error || data.message) : 'Fehler beim Erzeugen des Invites.');
+
+      const token = data.invite;
+      const shareUrl = window.location.origin + window.location.pathname + '?invite=' + encodeURIComponent(token);
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(shareUrl);
+          showStatus('Einladung erstellt und Link in Zwischenablage kopiert.', 'change');
+        } else {
+          showStatus('Einladung erstellt: ' + shareUrl, 'change');
+        }
+      } catch (e) {
+        showStatus('Einladung erstellt: ' + shareUrl, 'change');
+      }
+
+    } catch (err) {
+      console.error('Fehler beim Erzeugen der Einladung:', err);
+      showStatus(err.message || 'Fehler beim Erzeugen der Einladung', 'error');
+    }
+  }
+
+  async function changeUsername() {
+    const newU = document.getElementById('newUsername')?.value?.trim() || '';
+    const cur = document.getElementById('currentPasswordForUsername')?.value || '';
+    if (!newU) return showStatus('Bitte neuen Benutzernamen angeben.', 'error');
+    if (!/^[a-zA-Z0-9_-]+$/.test(newU)) return showStatus('Ungültiger Benutzername.', 'error');
+    if (!cur) return showStatus('Bitte aktuelles Passwort eingeben.', 'error');
+
+    try {
+      const resp = await fetch('bin/backend.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'change_username', newUsername: newU, password: cur }),
+      });
+      let data = null;
+      try { data = await resp.json(); } catch (e) { /* ignorieren */ }
+      if (!resp.ok) {
+        const msg = data && (data.error || data.message) ? (data.error || data.message) : ('Serverfehler: ' + resp.status);
+        throw new Error(msg);
+      }
+      if (!data || data.success === false) {
+        throw new Error(data && (data.error || data.message) ? (data.error || data.message) : 'Fehler beim Ändern des Benutzernamens.');
+      }
+
+      showStatus('Benutzername geändert. Seite wird neu geladen.', 'change');
+      closeChangeUsernameModal();
+      setTimeout(() => { location.reload(); }, 900);
+    } catch (err) {
+      console.error('Fehler beim Benutzernamenwechsel:', err);
+      showStatus(err.message || 'Fehler beim Benutzernamenwechsel', 'error');
+    }
+  }
+
+  // Modal-Buttons (Benutzername)
+  document.getElementById('closeChangeUser')?.addEventListener('click', () => closeChangeUsernameModal());
+  document.getElementById('cancelChangeUsernameBtn')?.addEventListener('click', () => closeChangeUsernameModal());
+  document.getElementById('changeUsernameBtn')?.addEventListener('click', () => changeUsername());
+
+  // Enter-Taste im Benutzernamen-Modal löst Änderung aus
+  ['newUsername','currentPasswordForUsername'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); changeUsername(); } });
+  });
+
+  // Enter-Taste im Modal löst Passwortänderung aus
+  ['currentPassword','newPassword','newPasswordConfirm'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); changePassword(); } });
+  });
+});
+
+// --- Handler für 'E-Mail ändern'-Modal ---
+document.addEventListener('DOMContentLoaded', function () {
+  const openBtn = document.getElementById('menuChangeEMail');
+  const modal = document.getElementById('changeEmailModal');
+  const closeBtn = document.getElementById('closeChangeEmail');
+  const cancelBtn = document.getElementById('cancelChangeEmailBtn');
+  const changeBtn = document.getElementById('changeEmailBtn');
+
+  function showModal() {
+    if (!modal) return;
+    // Schließe das Overflow-Menü, falls es geöffnet ist
+    try { if (typeof closeMoreMenu === 'function') closeMoreMenu(); } catch (e) {}
+    modal.setAttribute('aria-hidden', 'false');
+    modal.style.display = 'flex';
+    const input = document.getElementById('newEmail');
+    if (input) input.focus();
+  }
+  function hideModal() {
+    if (!modal) return;
+    modal.setAttribute('aria-hidden', 'true');
+    modal.style.display = 'none';
+  }
+
+  if (openBtn) openBtn.addEventListener('click', function (e) { e.preventDefault(); showModal(); });
+  if (closeBtn) closeBtn.addEventListener('click', function (e) { e.preventDefault(); hideModal(); });
+  if (cancelBtn) cancelBtn.addEventListener('click', function (e) { e.preventDefault(); hideModal(); });
+
+  if (changeBtn) changeBtn.addEventListener('click', function (e) {
+    e.preventDefault();
+    const newEmail = document.getElementById('newEmail')?.value?.trim() || '';
+    const password = document.getElementById('currentPasswordForEmail')?.value || '';
+    if (!newEmail) { showStatus('Bitte eine neue E-Mail-Adresse eingeben.', 'error'); return; }
+    if (!password) { showStatus('Bitte dein aktuelles Passwort eingeben.', 'error'); return; }
+
+    fetch('bin/backend.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'change_email', newEmail: newEmail, password: password })
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data && data.success) {
+          showStatus(data.message || 'E-Mail wurde aktualisiert.', 'change');
+          hideModal();
+        } else {
+          showStatus((data && data.message) || 'Fehler beim Aktualisieren der E-Mail.', 'error');
+        }
+      })
+      .catch((err) => {
+        showStatus('Serverfehler beim Aktualisieren der E-Mail.', 'error');
+      });
+  });
+
+  // Modal beim Klicken auf den Hintergrund schließen
+  if (modal) modal.addEventListener('click', function (e) {
+    if (e.target === modal) hideModal();
+  });
 });

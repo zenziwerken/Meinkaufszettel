@@ -1,4 +1,5 @@
-/* alan-sans-300 - latin */
+/* alan-sans-300 - latin 
+https://github.com/alan-eu/Alan-Sans/tree/main */
 @font-face {
   font-display: swap;
   font-family: "Alan Sans";
@@ -25,19 +26,22 @@
   src: url("./fonts/alan-sans-v1-latin-600.woff2") format("woff2");
 }
 
-*,input {
+*,
+input {
   font-family: "Alan Sans", Arial, sans-serif;
   -webkit-tap-highlight-color: transparent;
   outline: none;
 }
 
 body {
+  background: #f3f3f3 url(background.svg) repeat top center;
+  /* based on Plump Line - by Streamline https://www.streamlinehq.com/icons/plump-line-free/food-drink */
+  background-size: 15rem;
   font-family: "Alan Sans", Arial, sans-serif;
   max-width: 600px;
   font-weight: 300;
   margin: 50px auto;
   padding: 20px;
-  background-color: #f4f4f9;
   transition: opacity 0.2s ease-in-out;
 }
 
@@ -56,15 +60,17 @@ h1 {
   background-color: #fff;
   padding: 0 20px;
   border-radius: 8px;
+  position: relative;
 }
 
-#register, #login {
+#register,
+#login {
   margin-bottom: 20px;
 }
 
 ul {
   list-style: none;
-  margin: 20px 0;
+  margin: 15px 0;
   padding-left: 0;
 }
 
@@ -81,34 +87,71 @@ strong {
   font-weight: 600;
 }
 
+hr {
+  border: none;
+  border-top: 1px solid #aaa;
+  margin: 2px 0;
+}
+
 #serverLists li {
   background: #eeeeee;
   border: 1px solid #ddd;
   cursor: pointer;
-  padding: 0 8px;
+  padding: 4px 12px;
 }
 
 #serverLists li:hover {
   outline: 2px solid #999;
 }
 
-#serverLists li.speiseplan {
-  background-color: #ddf2f7;
-   border: 1px solid #90cedd;
-}
 
 #serverLists li.empty {
   background-color: #fafafa;
-   border: 1px solid #ccc;
+  border: 1px solid #ccc;
+}
+
+#serverLists li.speiseplan {
+  background-color: #ddf2f7;
+  border: 1px solid #90cedd;
+}
+
+#serverLists li.empty-list {
+  background: none;
+  border: none;
+  box-shadow: none;
+  cursor: default;
+  padding: 0;
+  margin: 0;
+}
+
+#serverLists li.empty-list:hover {
+  outline: none;
 }
 
 #itemList {
-  margin-bottom: 25px;
+  margin-bottom: 15px;
 }
 
 #itemList li {
   background: #eef6e5;
   border: 1px solid #d5e8be;
+}
+
+/* Hervorhebung für Einträge, die mit '!' enden */
+#itemList li.has-exclamation {
+  border-width: 1px 1px 1px 4px;
+  border-color: #f7d9db #f7d9db #f7d9db #dc3545;
+  background-color: #fcf0f0;
+}
+
+.has-exclamation .itemText {
+  color: #9b1d1d;
+  font-weight: 600;
+}
+
+#itemList li.has-question {
+  border-color: #d1d1d1;
+  background-color: #EFEFEF;
 }
 
 #inactiveList {
@@ -130,7 +173,8 @@ strong {
   padding: 0 8px;
 }
 
-#inactiveList.speiseplan li, li.speiseplan {
+#inactiveList.speiseplan li,
+li.speiseplan {
   margin: 10px 0;
   padding: 0 4px 0 8px;
 }
@@ -145,20 +189,23 @@ strong {
 #serverLists .itemText {
   color: #999;
   font-weight: 300;
+  line-height: 1.3rem;
 }
 
 #serverLists .itemText strong {
   color: #000;
 }
 
-.editBtn, .deleteBtn {
-    background: #4c4c4c4b;
-    cursor: pointer;
-    width: 31px;
-    height: 27px;
-    background-repeat: no-repeat;
-    background-size: 65%;
-    background-position: 50%;
+.editBtn,
+.deleteBtn,
+.shareBtn {
+  background: #4c4c4c4b;
+  cursor: pointer;
+  width: 31px;
+  height: 27px;
+  background-repeat: no-repeat;
+  background-size: 65%;
+  background-position: 50%;
 }
 
 .editBtn {
@@ -166,15 +213,25 @@ strong {
 }
 
 .deleteBtn {
-background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23FFF' d='M14.69 10.82c0-.48-.41-.88-.88-.88-.48 0-.88.41-.88.88v6.49c0 .48.41.88.88.88.48 0 .88-.41.88-.88v-6.49zm-4.13 0c0-.48-.41-.88-.88-.88s-.88.41-.88.88v6.49c0 .48.41.88.88.88s.88-.41.88-.88v-6.49zm-5.9-2.65v11.21c0 1.29 1.07 2.36 2.36 2.36h9.44c1.29 0 2.36-1.07 2.36-2.36V8.17h-1.77v11.21c0 .33-.26.59-.59.59H7.02c-.33 0-.59-.26-.59-.59V8.17H4.66zm4.94-5.9c-.48 0-.92.29-1.11.77l-.58 1.59H4.37c-.48 0-.88.41-.88.88s.4.89.88.89h14.75c.47 0 .88-.41.88-.89s-.41-.88-.88-.88h-3.54l-.59-1.59c-.18-.48-.63-.77-1.11-.77H9.6z'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23FFF' d='M14.69 10.82c0-.48-.41-.88-.88-.88-.48 0-.88.41-.88.88v6.49c0 .48.41.88.88.88.48 0 .88-.41.88-.88v-6.49zm-4.13 0c0-.48-.41-.88-.88-.88s-.88.41-.88.88v6.49c0 .48.41.88.88.88s.88-.41.88-.88v-6.49zm-5.9-2.65v11.21c0 1.29 1.07 2.36 2.36 2.36h9.44c1.29 0 2.36-1.07 2.36-2.36V8.17h-1.77v11.21c0 .33-.26.59-.59.59H7.02c-.33 0-.59-.26-.59-.59V8.17H4.66zm4.94-5.9c-.48 0-.92.29-1.11.77l-.58 1.59H4.37c-.48 0-.88.41-.88.88s.4.89.88.89h14.75c.47 0 .88-.41.88-.89s-.41-.88-.88-.88h-3.54l-.59-1.59c-.18-.48-.63-.77-1.11-.77H9.6z'/%3E%3C/svg%3E");
+}
+
+.shareBtn {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23fff' d='M22.09 10.19 15.8 3.9a2.17 2.17 0 0 0-1.55-.64c-1.21 0-2.2.98-2.2 2.19V7.2C5.87 7.77 1.6 11.72 1.6 16.89c0 .31.02.62.05.92.12 1.2 1.11 2.1 2.31 2.1.52 0 1.04-.18 1.45-.51 1.19-.95 3.59-2.58 6.61-3.05v1.73c0 .59.22 1.14.63 1.55.41.41.98.65 1.56.65s1.13-.23 1.55-.64l6.34-6.34a2.195 2.195 0 0 0 0-3.1Zm-8.4 3.86c-4.44 0-7.95 2.29-9.66 3.66-.07.06-.22.08-.24-.11-.02-.23-.03-.47-.03-.71 0-4.41 4.15-7.6 9.87-7.6h.57l.06-3.85 6.3 6.31v.02l-6.39 6.32v-4.02l-.48-.01Z'/%3E%3C/svg%3E");
 }
 
 .deleteBtn:hover {
   background-color: #dc3545;
   transition: background-color 0.15s ease;
 }
+
 .editBtn:hover {
   background-color: #218838;
+  transition: background-color 0.15s ease;
+}
+
+.shareBtn:hover {
+  background-color: #008AD3;
   transition: background-color 0.15s ease;
 }
 
@@ -190,10 +247,45 @@ background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
 }
 
 
-input[type="text"], input[type="password"] {
-  padding: 8px;
+input[type="text"],
+input[type="password"],
+input[type="email"] {
+  padding: 6px 8px;
   margin: 5px 10px 0 0;
   width: calc(100% - 144px);
+}
+
+/* Flexible input + button group: input fills remaining space, button keeps intrinsic width */
+.input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.input-row input[type="text"], .input-row input[type="password"], .input-row input[type="email"] {
+  flex: 1 1 auto;
+  width: auto; /* override global fixed calc-width */
+  margin: 0;
+}
+.input-row button {
+  flex: 0 0 auto;
+}
+
+/* Stacked inputs inside an input-row (vertical group that fills remaining space) */
+.input-stack {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#username {
+  width: calc(100% - 164px);
+}
+
+
+
+.reset-form input[type="password"]{
+  width: calc(100% - 190px);
 }
 
 .editInput {
@@ -202,8 +294,31 @@ input[type="text"], input[type="password"] {
   margin: 3px 3px 2px !important;
 }
 
+#inviteInput {
+  display: none;
+}
+
 #filename {
   display: none;
+}
+
+.forgot-pwd,
+.back-link {
+  margin-top: 10px;
+}
+
+.forgot-pwd a,
+.back-link a,
+.first-run-banner a {
+  text-decoration: none;
+  color: #0078d4;
+}
+
+.forgot-pwd a:hover,
+.back-link a:hover,
+.first-run-banner a:hover {
+  text-decoration: underline;
+  color: #005a9e;
 }
 
 button {
@@ -220,17 +335,18 @@ button:hover {
   background-color: #3a3a3a;
 }
 
+
 .status {
-    position: fixed;
-    left: 0;
-    bottom: 0;
-    z-index: 9999;
-    font-weight: 500;
-    width: calc(100vw - 28px);
-    text-align: center;
-    margin: 0;
-    padding: 10px 14px;
-    pointer-events: auto;
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  z-index: 9999;
+  font-weight: 500;
+  width: calc(100vw - 28px);
+  text-align: center;
+  margin: 0;
+  padding: 10px 14px;
+  pointer-events: auto;
 }
 
 .error {
@@ -256,6 +372,57 @@ button:hover {
   line-height: 2rem;
 }
 
+/* Dropdown menu for moreBtn */
+.more-menu {
+  display: none;
+  position: absolute;
+  right: 18px;
+  top: 10px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+  z-index: 1200;
+  min-width: 160px;
+  padding: 6px;
+}
+
+.more-menu .menu-item {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  text-align: left;
+  background: transparent !important;
+  border: none !important;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  color: #333 !important;
+  border-radius: 0 !important;
+  margin: 0 !important;
+  font-size: 0.95rem;
+}
+
+.more-menu .menu-item:hover {
+  background: #f6f6f6 !important;
+}
+
+/* Drei-Punkte Button neben Logout */
+.more {
+  float: inline-end;
+  cursor: pointer;
+  font-size: 1.6rem;
+  color: #999;
+  padding: 5px 0 5px 8px;
+  line-height: 1;
+  margin-right: 4px;
+}
+
+.more:hover {
+  color: #333;
+}
+
 .icon {
   background-image: url("icon.svg");
   display: block;
@@ -267,22 +434,249 @@ button:hover {
   margin-right: 0.5rem;
 }
 
+/* Modal: Change Password / Username / Invite / Email */
+#changePasswordModal.modal,
+#changeUsernameModal.modal,
+#createInviteModal.modal,
+#changeEmailModal.modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+#changePasswordModal.modal[aria-hidden="false"],
+#changeUsernameModal.modal[aria-hidden="false"],
+#createInviteModal.modal[aria-hidden="false"],
+#changeEmailModal.modal[aria-hidden="false"] {
+  display: flex;
+}
+
+#changePasswordModal .modal-inner,
+#changeUsernameModal .modal-inner,
+#createInviteModal .modal-inner,
+#changeEmailModal .modal-inner {
+  background: #fff;
+  padding: 18px;
+  border-radius: 8px;
+  max-width: 420px;
+  width: 92%;
+  margin: 0 12px;
+  position: relative;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+#changePasswordModal .modal-close,
+#changeUsernameModal .modal-close,
+#createInviteModal .modal-close,
+#changeEmailModal .modal-close {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: #666;
+}
+
+#changePasswordModal .modal-close:hover,
+#changeUsernameModal .modal-close:hover,
+#createInviteModal .modal-close:hover,
+#changeEmailModal .modal-close:hover {
+  color: #000;
+}
+
+#changePasswordModal .modal-title,
+#changeUsernameModal .modal-title,
+#createInviteModal .modal-title,
+#changeEmailModal .modal-title,
+#helpTexts .modal-title {
+  margin: 0 0 12px 0;
+}
+
+#changePasswordModal .modal-body,
+#changeUsernameModal .modal-body,
+#createInviteModal .modal-body,
+#changeEmailModal .modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#changePasswordModal .modal-body input[type="text"],
+#changePasswordModal .modal-body input[type="password"],
+#changeUsernameModal .modal-body input[type="password"],
+#changeUsernameModal .modal-body input[type="text"],
+#changeEmailModal .modal-body input[type="password"],
+#changeEmailModal .modal-body input[type="email"] {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  margin: 0;
+}
+
+#changePasswordModal .modal-actions,
+#changeUsernameModal .modal-actions,
+#createInviteModal .modal-actions,
+#changeEmailModal .modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+
+#changePasswordModal .modal-actions button,
+#changeUsernameModal .modal-actions button,
+#changeEmailModal .modal-actions button {
+  min-width: 84px;
+}
+
+#cancelChangePasswordBtn,
+#cancelChangeUsernameBtn {
+  background-color: #dc3545;
+}
+
+#cancelChangePasswordBtn,
+#cancelChangeUsernameBtn,
+#cancelChangeEmailBtn {
+  background-color: #dc3545;
+}
+
+#cancelChangePasswordBtn:hover,
+#cancelChangeUsernameBtn:hover,
+#cancelChangeEmailBtn:hover {
+  background-color: #c82333;
+}
+
+#changePasswordBtn,
+#changeUsernameBtn,
+#changeEmailBtn {
+  background-color: #218838;
+}
+#changePasswordBtn:hover,
+#changeUsernameBtn:hover,
+#changeEmailBtn:hover {
+  background-color: #1e7e34;
+}
+
+.empty-list .empty-list-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: flex-start;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfbfb 100%);
+  border: 1px solid #e2e2e2;
+  padding: 12px 14px;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  max-width: 520px;
+}
+
+.empty-list .empty-list-inner strong {
+  font-size: 1.05rem;
+  color: #222;
+}
+
+.empty-list .empty-list-hint {
+  color: #666;
+  font-size: 0.95rem;
+}
+
+.empty-list .empty-list-actions {
+  margin-top: 6px;
+}
+
+.empty-list .primary {
+  background: #0078d4;
+  color: #fff;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.empty-list .primary:active {
+  transform: translateY(1px);
+}
+
+#helpTexts li {
+  display:block;
+}
+
+#helpTexts li strong {
+  font-weight: 600; 
+}
+
+#helpTexts .btn {
+    display: inline-block;
+    border-radius: 5px;
+    height: 24px;
+    width: 28px;
+    margin-bottom: -6px;
+}
+
+/* First Run Banner: styling angepasst an das App-Design */
+#firstRunBanner {
+  background: linear-gradient(180deg, #ffffff 0%, #fbfbfb 100%);
+  border: 1px solid #e6e6e6;
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+  padding: 14px;
+  margin: 12px 0;
+  max-width: 520px;
+}
+
+@media (max-width: 520px) {
+  .empty-list .empty-list-inner {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 37rem) {
+
+  #changePasswordModal.modal,
+  #changeUsernameModal.modal,
+  #createInviteModal.modal,
+  #changeEmailModal.modal {
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 6vh;
+    overflow-y: auto;
+  }
+
+  #changePasswordModal .modal-inner,
+  #changeUsernameModal .modal-inner,
+  #createInviteModal .modal-inner,
+  #changeEmailModal .modal-inner {
+    width: calc(100% - 24px);
+    padding: 14px;
+    margin: 0 12px;
+    margin-top: 1rem;
+    max-height: calc(100vh - 12vh);
+    overflow-y: auto;
+    box-sizing: border-box;
+  }
+}
+
 .dragging {
   opacity: 0.4;
 }
-
-
 .dragHandle {
-    cursor: grab;
-    display: flex;
-    align-items: center;
-    user-select: none;
-    width: 28px;
-    height: 32px;
-    background-size: 75%;
-    background-position: center;
-    background-repeat: no-repeat;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%230007'%3E%3Crect width='16' height='2' x='4' y='7' rx='1'/%3E%3Crect width='16' height='2' x='4' y='11' rx='1'/%3E%3Crect width='16' height='2' x='4' y='15' rx='1'/%3E%3C/svg%3E");
+  cursor: grab;
+  display: flex;
+  align-items: center;
+  user-select: none;
+  width: 28px;
+  height: 32px;
+  background-size: 75%;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%230007'%3E%3Crect width='16' height='2' x='4' y='7' rx='1'/%3E%3Crect width='16' height='2' x='4' y='11' rx='1'/%3E%3Crect width='16' height='2' x='4' y='15' rx='1'/%3E%3C/svg%3E");
 }
 
 .drop-target {
@@ -304,7 +698,7 @@ button:hover {
   font-size: 0.9rem;
   height: 28px;
   min-width: 72px;
-  box-shadow: 0 1px 0 rgba(0,0,0,0.1);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1);
 
   /* progress als Hintergrund (voll sichtbar = 100%) */
   background-image: linear-gradient(90deg, #444, #444);
@@ -325,8 +719,13 @@ li.pending-active .undoBtn:hover {
 
 /* Bar-Animation: background-size von voller Breite auf 0 */
 @keyframes undo-bg-shrink {
-  from { background-size: 0% 100%; }
-  to   { background-size: 100% 100%; }
+  from {
+    background-size: 0% 100%;
+  }
+
+  to {
+    background-size: 100% 100%;
+  }
 }
 
 /* Reduced motion respektieren */
@@ -399,6 +798,7 @@ li.pending-active .undoBtn:hover {
   h1 {
     margin: 10px 0;
     padding: 0 0 10px;
+    font-size: 2rem;
   }
 
   .container {
@@ -406,7 +806,7 @@ li.pending-active .undoBtn:hover {
     padding: 10px 20px;
     box-shadow: none;
     width: calc(100vw - 40px);
-      background:  none ;
+    background: none;
   }
 
   .itemText {
@@ -426,14 +826,21 @@ li.pending-active .undoBtn:hover {
     /* Wichtig für korrekte Höhenberechnung */
   }
 
-  input[type="text"], input[type="password"],
+  input[type="text"],
+  input[type="password"],
+  input[type="email"],
   button {
     font-size: 1rem;
   }
 
-  input[type="text"], input[type="password"] {
+  input[type="text"],
+  input[type="password"],
+  input[type="email"] {
     width: calc(100% - 158px);
   }
+  #serverLists li {
+      padding: 3px 6px;
+    }
 
   .editInput {
     font-size: 1.2rem;
@@ -454,11 +861,60 @@ li.pending-active .undoBtn:hover {
     padding: 10px 12px;
     width: calc(100vw - 24px);
   }
+
+  .more-menu .menu-item {
+    font-size: 1.2rem;
+  }
+
+  .modified {
+    font-size: smaller;
+  }
 }
 
 
 @media (max-width: 24rem) {
   .modified {
-    display:none;
+    display: none;
   }
 }
+
+/* Hilfe-Overlay */
+#helpTexts {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 1100;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  hyphens: auto;
+
+}
+
+#helpTexts[aria-hidden="false"] { display: flex; }
+
+.help-inner {
+  position: relative;
+  background: #fff;
+  padding: 18px;
+  border-radius: 8px;
+  max-width: 720px;
+  width: 94%;
+  max-height: 80vh;
+  overflow: auto;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+}
+
+.help-close {
+    position: absolute;
+    right: 14px;
+    top: 5px;
+    background: none;
+    border: none;
+    font-size: 28px;
+    cursor: pointer;
+  color: #666;
+}
+
+.help-close:hover { color: #000; }
