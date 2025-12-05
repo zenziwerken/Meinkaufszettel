@@ -19,12 +19,11 @@ $inactivityTimeoutMs = 10 /* Minuten */ * 60 * 1000;
 
 // Erlaube nur Zugriffe von bestimmten Domains (CORS)
 $allowedOrigins = [
-    'https://www.objective-view.de'
+    ''
 ];
 
 $adminUsers = [
-    'Daniel',
-    'Barbara'
+    ''
 ];
 
 // Spezielle Einstellungen für Sonderfunktion des "Speiseplans"
