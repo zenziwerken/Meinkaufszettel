@@ -625,7 +625,22 @@ if ($action === 'load') {
     if (!file_exists($fullPath)) sendError('Liste nicht gefunden.', 404);
     $jsonContent = @file_get_contents($fullPath);
     if ($jsonContent === false) sendError('Fehler beim Lesen der Liste.', 500);
-    echo $jsonContent;
+    // Bestimme, ob die Datei geteilt ist (mehrere Hardlinks -> nlink > 1)
+    $isShared = false;
+    $st = @stat($fullPath);
+    if ($st !== false && isset($st['nlink']) && $st['nlink'] > 1) {
+        $isShared = true;
+    }
+
+    // Versuche die gespeicherte JSON-Struktur zu decodieren und das `shared`-Flag hinzuzufügen.
+    $decoded = json_decode($jsonContent, true);
+    if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+        $decoded['shared'] = $isShared;
+        echo json_encode($decoded, JSON_UNESCAPED_UNICODE);
+    } else {
+        // Fallback: falls die Datei kein JSON-Objekt enthält, liefere den Rohinhalt zusammen mit dem Flag
+        echo json_encode(['content' => $jsonContent, 'shared' => $isShared], JSON_UNESCAPED_UNICODE);
+    }
     exit;
 }
 

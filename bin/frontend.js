@@ -171,20 +171,43 @@ function loadList() {
       ulActive.innerHTML = "";
       ulInactive.innerHTML = "";
 
-      if (Array.isArray(data.active)) {
-        data.active.forEach((item) => ulActive.appendChild(createActiveItem(item)));
+      // Normalisiere mögliche Backend-Formate:
+      // - bevorzugt: direktes Objekt mit `active`/`inactive` und optional `shared`
+      // - fallback: Backend liefert { content: "<raw json>", shared: true }
+      let payload = data;
+      if (payload && typeof payload.content === 'string' && !Array.isArray(payload.active) && !Array.isArray(payload.inactive)) {
+        try {
+          const parsed = JSON.parse(payload.content);
+          if (parsed && typeof parsed === 'object') {
+            payload = Object.assign({}, parsed, { shared: !!payload.shared });
+          }
+        } catch (e) {
+          // leave payload as-is; it will be handled as invalid below
+        }
       }
-      if (Array.isArray(data.inactive)) {
-        data.inactive.forEach((item) => ulInactive.appendChild(createInactiveItem(item)));
-        sortInactiveList();
-          }
 
-          // Periodische Synchronisation starten (oder neu starten) für diese Liste
-          try {
-            startPeriodicSync(filename);
-          } catch (e) {
-            console.warn("Konnte Periodic Sync nicht starten:", e);
-          }
+      // Setze globalen Shared-Status (wird von startPeriodicSync genutzt)
+      _currentListShared = !!(payload && payload.shared);
+
+      if (Array.isArray(payload.active)) {
+        payload.active.forEach((item) => ulActive.appendChild(createActiveItem(item)));
+      }
+      if (Array.isArray(payload.inactive)) {
+        payload.inactive.forEach((item) => ulInactive.appendChild(createInactiveItem(item)));
+        sortInactiveList();
+      }
+
+      // Periodische Synchronisation: nur für geteilte Listen starten
+      try {
+        if (_currentListShared) {
+          startPeriodicSync(filename);
+        } else {
+          // Sicherstellen, dass kein Sync läuft für lokale/privat Listen
+          stopPeriodicSync();
+        }
+      } catch (e) {
+        console.warn("Konnte Periodic Sync nicht starten/stoppen:", e);
+      }
     })
     .catch((error) => {
       showStatus("Fehler: " + error.message, "error");
@@ -348,6 +371,8 @@ function acceptSharedToken(token) {
 
 // --- Periodische Synchronisation ---
 let _syncIntervalId = null;
+// Aktueller Zustand der geladenen Liste: true wenn die Liste geteilt ist (Backend-Flag `shared`)
+let _currentListShared = false;
 function stopPeriodicSync() {
   if (_syncIntervalId) {
     clearInterval(_syncIntervalId);
@@ -358,6 +383,11 @@ function stopPeriodicSync() {
 function startPeriodicSync(filename) {
   stopPeriodicSync();
   if (!filename) return;
+  // Starte periodischen Sync nur, wenn die aktuell geladene Liste als geteilt markiert ist
+  if (!_currentListShared) {
+    console.debug('Periodischer Sync deaktiviert: Liste ist nicht geteilt');
+    return;
+  }
   // Initiale Verzögerung bis zum ersten Sync: 60s
   _syncIntervalId = setInterval(() => syncNow(filename), syncInterval);
 }

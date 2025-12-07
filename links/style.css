@@ -48,7 +48,6 @@ body {
 h1 {
   font-weight: 600;
   hyphens: auto;
-  border-bottom: 1px solid #e6e6ed;
   margin: 20px 0 15px;
   padding: 0 0 10px;
 
@@ -516,7 +515,7 @@ button:hover {
   width: 100%;
   box-sizing: border-box;
   padding: 8px 10px;
-  margin: 0;
+  margin: 0 0 8px;
 }
 
 #changePasswordModal .modal-actions,
@@ -890,6 +889,16 @@ li.pending-active .undoBtn:hover {
   padding: 20px;
   hyphens: auto;
 
+}
+
+.visually-hidden-username {
+  position: absolute !important;
+  left: -9999px !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  clip: rect(1px, 1px, 1px, 1px) !important;
+  white-space: nowrap !important;
 }
 
 #helpTexts[aria-hidden="false"] { display: flex; }

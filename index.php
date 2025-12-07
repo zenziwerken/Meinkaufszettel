@@ -30,16 +30,19 @@ $hasInvite = $safeInvite !== '' && file_exists($invitesDir . '/' . $safeInvite);
 
 $listName = null;
 foreach (array_keys($_GET) as $k) {
-    if ($k !== 'user') { $listName = $k; break; }
+    if ($k !== 'user') {
+        $listName = $k;
+        break;
+    }
 }
 
 $isSpeiseplan   = ($listName === $speiseplanName);
 $cssSpeiseplan  = ($isSpeiseplan) ? 'class="speiseplan"' : '';
 $listNameOutput = htmlspecialchars(
-        str_replace(['_', '~'], [' ', '/'], $listName),
-        ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5,
-        'UTF-8'
-    );
+    str_replace(['_', '~'], [' ', '/'], $listName),
+    ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5,
+    'UTF-8'
+);
 
 // --- Stylesheet-Versionierung ---
 $styleVersion  = file_exists(__DIR__ . '/links/style.css') ? date("Y-m-d_H-i-s", filemtime(__DIR__ . '/links/style.css')) : time();
@@ -78,12 +81,13 @@ if (isset($username) && $username) {
 }
 
 $createInviteLink = '';
-if ($isAdmin) { 
+if ($isAdmin) {
     $createInviteLink = '<hr><button id="menuCreateInvite" class="menu-item">Einladungslink erstellen</button>';
 }
 ?>
 <!DOCTYPE html>
 <html lang="de">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -95,6 +99,7 @@ if ($isAdmin) {
     <title>Meinkaufszettel</title>
     <?= $speiseplanCss ?>
 </head>
+
 <body>
     <div class="container">
 
@@ -105,13 +110,15 @@ if ($isAdmin) {
             <div id="register">
                 <span class="icon"></span>
                 <h1>Erster Start</h1>
-                <p class="hint">Willkommen beim <strong>Meinaufszettel</strong>. Wähle einen <strong>Benutzernamen</strong>  und ein <strong>Passwort</strong>  um das Benutzerkonto zu aktivieren. Die <strong>E-Mail</strong> wird ausschließlich verwendet, wenn du dein Passwort vergessen hast.</p>
+                <p class="hint">Willkommen beim <strong>Meinaufszettel</strong>. Wähle einen <strong>Benutzernamen</strong> und ein <strong>Passwort</strong> um das Benutzerkonto zu aktivieren. Die <strong>E-Mail</strong> wird ausschließlich verwendet, wenn du dein Passwort vergessen hast.</p>
                 <div>
+                    <form>
                     <input type="text" id="inviteInput" placeholder="Invite-Token (falls nicht per Link)" value="<?= htmlspecialchars($inviteParam) ?>">
                     <input type="text" id="registerUsername" placeholder="Benutzername (a-zA-Z0-9_-)">
                     <input type="password" id="passCode" placeholder="Passwort">
                     <input type="email" id="registerEmail" placeholder="E-Mail für Passwort-Zurücksetzen">
                     <button id="registerBtn">Festlegen</button>
+                </form>
                 </div>
             </div>
             <div id="login"></div>
@@ -125,9 +132,11 @@ if ($isAdmin) {
                 <span class="icon"></span>
                 <h1>Meinkaufszettel</h1>
                 <div>
-                    <input type="text" id="loginUsername" placeholder="Benutzername">
-                    <input type="password" id="passCode" placeholder="Passwort">
-                    <button id="loginBtn">Anmelden</button>
+                    <form>
+                        <input type="text" id="loginUsername" placeholder="Benutzername" autocomplete="username">
+                        <input type="password" id="passCode" placeholder="Passwort" autocomplete="current-password">
+                        <button id="loginBtn">Anmelden</button>
+                    </form>
                     <div class="forgot-pwd"><a href="reset_request.php" id="forgotPasswordLink">Passwort vergessen?</a></div>
                 </div>
             </div>
@@ -141,7 +150,7 @@ if ($isAdmin) {
                     <button id="menuChangeUsername" class="menu-item">Benutzername ändern</button>
                     <button id="menuChangePassword" class="menu-item">Passwort ändern</button>
                     <button id="menuChangeEMail" class="menu-item">E-Mail ändern</button>
-                    <?=$createInviteLink?>
+                    <?= $createInviteLink ?>
                     <hr>
                     <button id="menuLogout" class="menu-item">Abmelden</button>
                 </div>
@@ -158,14 +167,14 @@ if ($isAdmin) {
             <div id="listElements">
                 <span class="close" id="backBtn" title="zurück zur Übersicht"></span>
                 <span class="icon"></span>
-                <h1 id="listName"><?=$listNameOutput?></h1>
+                <h1 id="listName"><?= $listNameOutput ?></h1>
                 <div class="input-row">
                     <input type="text" id="newItem" placeholder="Ich brauche ...">
                     <button id="addItemBtn">Hinzufügen</button>
                 </div>
 
                 <ul id="itemList"></ul>
-                <ul id="inactiveList" <?=$cssSpeiseplan?>></ul>
+                <ul id="inactiveList" <?= $cssSpeiseplan ?>></ul>
             </div>
 
             <!-- Hilfetexte (Overlay/Modal) -->
@@ -173,72 +182,81 @@ if ($isAdmin) {
                 <div class="help-inner" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
                     <button id="helpCloseBtn" class="help-close" aria-label="Hilfe schließen">×</button>
                     <h2 id="helpTitle" class="modal-title">Kurzanleitung</h2>
-                <ul>
-                    <li><strong>Neuen Zettel</strong> erstellen: Gib einen Namen im Feld „Ich gehe zu ...“ ein und klicke auf „Hinzufügen“.</li>
-                    <li>Zettel <strong>teilen</strong>: Klick auf das Teilen-Symbol <span class="shareBtn btn"></span> und ein Link wird in die Zwischenablage gelegt. Sende ihn an einen anderen Benutzer um den Zettel gemeinsam zu benutzen. Mehrere Personen können die Liste gleichzeitig bearbeiten. Änderungen werden live synchronisiert.</li>
-                    <li>Zettel/Eintrag <strong>umbenennen</strong>: Klicke auf das Stift-Symbol <span class="editBtn btn"></span>.</li>
-                    <li>Zettel/Eintrag <strong>löschen</strong>: Klicke auf das Papierkorb-Symbol <span class="deleteBtn btn"></span> neben dem Namen.</li>
-                    <li>Neuen <strong>Eintrag hinzufügen</strong>: Wähle einen Zettel aus der Übersicht, gib einen Eintrag im Feld „Ich brauche ...“ ein und klicke auf „Hinzufügen“.</li>
-                    <li>Einträge <strong>sortieren</strong>: halte und ziehe die Einträge auf dem Symbol <span class="dragHandle btn"></span> ganz vorne noch oben oder unten. Listen werden immer nach dem Alphabet sortiert.</li>
-                    <li>Eintrag <strong>abhaken</strong>: Klicke auf den Namen des Eintrags, um ihn als erledigt zu markieren.</li>
-                    <li>Abgehakten Eintrag <strong>wieder aktivieren</strong>: Klicke auf den Eintrag, um ihn wieder zu aktivieren.</li>
-                    <li><strong>Speiseplan</strong>: Ein Zettel mit den Namen 'Speiseplan' hat eine Sonderrolle. Einträge werden farblich und mit Wochentag markiert und der aktive Eintrag wird immer um 8 Uhr deaktiviert.</li>
-                    <li><strong>Wichtige / Unwichtige Einträge</strong> kann man mit einem '!' oder einem '?' am Ende versehen.</li>
-                </ul>
+                    <ul>
+                        <li><strong>Neuen Zettel</strong> erstellen: Gib einen Namen im Feld „Ich gehe zu ...“ ein und klicke auf „Hinzufügen“.</li>
+                        <li>Zettel <strong>teilen</strong>: Klick auf das Teilen-Symbol <span class="shareBtn btn"></span> und ein Link wird in die Zwischenablage gelegt. Sende ihn an einen anderen Benutzer um den Zettel gemeinsam zu benutzen. Mehrere Personen können die Liste gleichzeitig bearbeiten. Änderungen werden live synchronisiert.</li>
+                        <li>Zettel/Eintrag <strong>umbenennen</strong>: Klicke auf das Stift-Symbol <span class="editBtn btn"></span>.</li>
+                        <li>Zettel/Eintrag <strong>löschen</strong>: Klicke auf das Papierkorb-Symbol <span class="deleteBtn btn"></span> neben dem Namen.</li>
+                        <li>Neuen <strong>Eintrag hinzufügen</strong>: Wähle einen Zettel aus der Übersicht, gib einen Eintrag im Feld „Ich brauche ...“ ein und klicke auf „Hinzufügen“.</li>
+                        <li>Einträge <strong>sortieren</strong>: halte und ziehe die Einträge auf dem Symbol <span class="dragHandle btn"></span> ganz vorne noch oben oder unten. Listen werden immer nach dem Alphabet sortiert.</li>
+                        <li>Eintrag <strong>abhaken</strong>: Klicke auf den Namen des Eintrags, um ihn als erledigt zu markieren.</li>
+                        <li>Abgehakten Eintrag <strong>wieder aktivieren</strong>: Klicke auf den Eintrag, um ihn wieder zu aktivieren.</li>
+                        <li><strong>Speiseplan</strong>: Ein Zettel mit den Namen 'Speiseplan' hat eine Sonderrolle. Einträge werden farblich und mit Wochentag markiert und der aktive Eintrag wird immer um 8 Uhr deaktiviert.</li>
+                        <li><strong>Wichtige / Unwichtige Einträge</strong> kann man mit einem '!' oder einem '?' am Ende versehen.</li>
+                    </ul>
                 </div>
             </div>
             <!-- Statusanzeige -->
             <div id="status"></div>
             <input type="text" id="filename">
 
-        <!-- Modal 'Passwort ändern' -->
-        <div id="changePasswordModal" class="modal" aria-hidden="true" role="dialog" aria-modal="false">
-            <div class="modal-inner">
-                <button id="closeChangePwd" class="modal-close" aria-label="Schließen">×</button>
-                <h2 class="modal-title">Passwort ändern</h2>
-                <div class="modal-body">
-                    <input type="password" id="currentPassword" placeholder="Aktuelles Passwort" autocomplete="current-password">
-                    <input type="password" id="newPassword" placeholder="Neues Passwort (mind. 6 Zeichen)" autocomplete="new-password">
-                    <input type="password" id="newPasswordConfirm" placeholder="Neues Passwort wiederholen" autocomplete="new-password">
-                    <div class="modal-actions">
-                        <button id="cancelChangePasswordBtn" type="button">Abbrechen</button>
-                        <button id="changePasswordBtn" type="button">Ändern</button>
+            <!-- Modal 'Passwort ändern' -->
+            <div id="changePasswordModal" class="modal" aria-hidden="true" role="dialog" aria-modal="false">
+                <div class="modal-inner">
+                    <button id="closeChangePwd" class="modal-close" aria-label="Schließen">×</button>
+                    <h2 class="modal-title">Passwort ändern</h2>
+                    <div class="modal-body">
+                        <form>
+                            <input type="text" name="username" autocomplete="username" value="<?= htmlspecialchars($username ?? '') ?>" tabindex="-1" style="position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden;" aria-hidden="true">
+                            <input type="password" id="currentPassword" placeholder="Aktuelles Passwort" autocomplete="current-password">
+                            <input type="password" id="newPassword" placeholder="Neues Passwort (mind. 6 Zeichen)" autocomplete="new-password">
+                            <input type="password" id="newPasswordConfirm" placeholder="Neues Passwort wiederholen" autocomplete="new-password">
+                            <div class="modal-actions">
+                                <button id="cancelChangePasswordBtn" type="button">Abbrechen</button>
+                                <button id="changePasswordBtn" type="button">Ändern</button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Modal 'Benutzername ändern' -->
-        <div id="changeUsernameModal" class="modal" aria-hidden="true" role="dialog" aria-modal="false">
-            <div class="modal-inner">
-                <button id="closeChangeUser" class="modal-close" aria-label="Schließen">×</button>
-                <h2 class="modal-title">Benutzername ändern</h2>
-                <div class="modal-body">
-                    <input type="text" id="newUsername" placeholder="Neuer Benutzername (a-zA-Z0-9_-)">
-                    <input type="password" id="currentPasswordForUsername" placeholder="Aktuelles Passwort" autocomplete="current-password">
-                    <div class="modal-actions">
-                        <button id="cancelChangeUsernameBtn" type="button">Abbrechen</button>
-                        <button id="changeUsernameBtn" type="button">Ändern</button>
+            <!-- Modal 'Benutzername ändern' -->
+            <div id="changeUsernameModal" class="modal" aria-hidden="true" role="dialog" aria-modal="false">
+                <div class="modal-inner">
+                    <button id="closeChangeUser" class="modal-close" aria-label="Schließen">×</button>
+                    <h2 class="modal-title">Benutzername ändern</h2>
+                    <div class="modal-body">
+                        <form>
+                            <input type="text" name="username" autocomplete="username" value="<?= htmlspecialchars($username ?? '') ?>" tabindex="-1" style="position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden;" aria-hidden="true">
+                            <input type="text" id="newUsername" placeholder="Neuer Benutzername (a-zA-Z0-9_-)" autocomplete="username">
+                            <input type="password" id="currentPasswordForUsername" placeholder="Aktuelles Passwort" autocomplete="current-password">
+                            <div class="modal-actions">
+                                <button id="cancelChangeUsernameBtn" type="button">Abbrechen</button>
+                                <button id="changeUsernameBtn" type="button">Ändern</button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Modal 'E-Mail ändern' -->
-        <div id="changeEmailModal" class="modal" aria-hidden="true" role="dialog" aria-modal="false">
-            <div class="modal-inner">
-                <button id="closeChangeEmail" class="modal-close" aria-label="Schließen">×</button>
-                <h2 class="modal-title">E-Mail ändern</h2>
-                <div class="modal-body">
-                    <input type="email" id="newEmail" placeholder="Neue E-Mail-Adresse">
-                    <input type="password" id="currentPasswordForEmail" placeholder="Aktuelles Passwort" autocomplete="current-password">
-                    <div class="modal-actions">
-                        <button id="cancelChangeEmailBtn" type="button">Abbrechen</button>
-                        <button id="changeEmailBtn" type="button">Ändern</button>
+            <!-- Modal 'E-Mail ändern' -->
+            <div id="changeEmailModal" class="modal" aria-hidden="true" role="dialog" aria-modal="false">
+                <div class="modal-inner">
+                    <button id="closeChangeEmail" class="modal-close" aria-label="Schließen">×</button>
+                    <h2 class="modal-title">E-Mail ändern</h2>
+                    <div class="modal-body">
+                        <form>
+                            <input type="text" name="username" autocomplete="username" value="<?= htmlspecialchars($username ?? '') ?>" tabindex="-1" style="position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden;" aria-hidden="true">
+                            <input type="email" id="newEmail" placeholder="Neue E-Mail-Adresse" autocomplete="email">   
+                            <input type="password" id="currentPasswordForEmail" placeholder="Aktuelles Passwort" autocomplete="current-password">
+                            <div class="modal-actions">
+                                <button id="cancelChangeEmailBtn" type="button">Abbrechen</button>
+                                <button id="changeEmailBtn" type="button">Ändern</button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             </div>
-        </div>
 
         <?php endif; ?>
 
@@ -260,8 +278,12 @@ if ($isAdmin) {
 
             fetch('bin/backend.php', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'firstRun' })
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    action: 'firstRun'
+                })
             }).then(res => res.json()).then(data => {
                 if (!data || data.success !== true) return;
                 if (data.firstRun && data.invite) {
@@ -277,4 +299,5 @@ if ($isAdmin) {
     </script>
     <script src="bin/frontend.js?<?= $scriptVersion ?>"></script>
 </body>
+
 </html>

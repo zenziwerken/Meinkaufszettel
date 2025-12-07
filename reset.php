@@ -101,12 +101,9 @@ $styleVersion = file_exists(__DIR__ . '/links/style.css') ? date("Y-m-d_H-i-s", 
             <?php elseif ($error === ''): ?>
                 <form method="post" action="" class="reset-form">
                     <input type="hidden" name="token" value="<?= htmlspecialchars($safeToken, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">
-                    
                             <input id="password" name="password" type="password" required minlength="6" placeholder="Neues Passwort">
                             <input id="password_confirm" name="password_confirm" type="password" required minlength="6" placeholder="Passwort wiederholen">
-                       
                         <button type="submit">Passwort setzen</button>
-                    
                         <div class="back-link">
                             <a href="./">Zurück zur Anmeldung</a>
                         </div>
