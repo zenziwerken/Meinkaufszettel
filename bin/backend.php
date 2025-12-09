@@ -10,7 +10,7 @@ $normalizedOrigin = $origin ? rtrim($origin, '/') : '';
 if ($normalizedOrigin !== '' && in_array($normalizedOrigin, $allowedOrigins, true)) {
     header('Access-Control-Allow-Origin: ' . $normalizedOrigin);
     header('Vary: Origin');
-    header('Access-Control-Allow-Methods: POST, OPTIONS');
+    header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
     header('Access-Control-Allow-Headers: Content-Type, Authorization');
 } else {
     // keine CORS-Header setzen wenn Origin nicht erlaubt
@@ -54,30 +54,41 @@ if (!is_writable($resetsDir)) {
     sendError('Resetverzeichnis ist nicht beschreibbar.', 500);
 }
 
-// Nur POST akzeptieren
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+// Erlaube GET nur für den Download-Endpunkt (bin/backend.php?download=TOKEN)
+$isGetDownload = ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['download']));
+if (!$isGetDownload && $_SERVER['REQUEST_METHOD'] !== 'POST') {
     sendError('Ungültige Anfrage.', 405);
 }
 
-// Content-Length frühzeitig begrenzen, falls angegeben
+// Content-Length frühzeitig begrenzen, falls angegeben (nur für POST)
 $maxRequestBytes = 16 * 1024; // 16 KB
-$contentLength = isset($_SERVER['CONTENT_LENGTH']) ? (int)$_SERVER['CONTENT_LENGTH'] : null;
-if ($contentLength !== null && $contentLength > $maxRequestBytes) {
-    sendError('Die Anfrage ist zu groß.', 413);
-}
+if (!$isGetDownload) {
+    $contentLength = isset($_SERVER['CONTENT_LENGTH']) ? (int)$_SERVER['CONTENT_LENGTH'] : null;
+    if ($contentLength !== null && $contentLength > $maxRequestBytes) {
+        sendError('Die Anfrage ist zu groß.', 413);
+    }
 
-// Request-Body lesen (mit sicherem Limit)
-$input = file_get_contents('php://input', false, null, 0, $maxRequestBytes);
-if ($input === false) {
-    sendError('Fehler beim Lesen des Request-Körpers.', 400);
-}
-$data = json_decode($input, true);
-if (json_last_error() !== JSON_ERROR_NONE) {
-    sendError('Ungültiges JSON-Format.', 400);
+    // Request-Body lesen (mit sicherem Limit)
+    $input = file_get_contents('php://input', false, null, 0, $maxRequestBytes);
+    if ($input === false) {
+        sendError('Fehler beim Lesen des Request-Körpers.', 400);
+    }
+    $data = json_decode($input, true);
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        sendError('Ungültiges JSON-Format.', 400);
+    }
+} else {
+    // GET-Download: kein JSON-Body
+    $data = [];
 }
 
 // --- Aktionen ---
 $action = $data['action'] ?? null;
+
+// Wenn dies ein GET-Download-Request ist, setze die Aktion auf 'download'
+if ($isGetDownload) {
+    $action = 'download';
+}
 
 // Bestimme den angefragten Benutzernamen (entweder im Payload oder über das Cookie)
 $reqUsername = isset($data['username']) ? trim((string)$data['username']) : (isset($_COOKIE['username']) ? trim((string)$_COOKIE['username']) : null);
@@ -138,9 +149,14 @@ if ($action === 'register') {
     $userPasswordFile = $userDir . '/.password';
     $hashedPassword = password_hash($data['password'], PASSWORD_DEFAULT);
     if (file_put_contents($userPasswordFile, $hashedPassword) === false) sendError('Konnte Passwort nicht speichern.', 500);
-    // Speichere die E-Mail-Adresse in .email (nur für Reset-Versand)
-    $emailFile = $userDir . '/.email';
-    if (file_put_contents($emailFile, $email, LOCK_EX) === false) {
+    // Speichere die E-Mail-Adresse als JSON in .settings (nur für Reset-Versand)
+    $emailFile = $userDir . '/.settings';
+    $settingsPayload = json_encode(['email' => $email], JSON_UNESCAPED_UNICODE);
+    if ($settingsPayload === false) {
+        @unlink($userPasswordFile);
+        sendError('Server-Fehler beim JSON-Encoding.', 500);
+    }
+    if (file_put_contents($emailFile, $settingsPayload, LOCK_EX) === false) {
         // Versuche, Passwort-Datei zu entfernen, um inkonsistente Registrierung zu vermeiden
         @unlink($userPasswordFile);
         sendError('Konnte E-Mail nicht speichern.', 500);
@@ -413,6 +429,48 @@ if ($action === 'change_username') {
     exit;
 }
 
+// Anzeigename ändern: speichert eine frei formbare Darstellung des Namens in .settings
+if ($action === 'change_displayname') {
+    // Nur Session-basierte Auth erlaubt
+    $currentUser = $_SESSION['auth_user'] ?? null;
+    if ($currentUser === null) sendError('Nicht autorisiert.', 401);
+
+    $newDisplay = isset($data['newDisplayName']) ? trim((string)$data['newDisplayName']) : '';
+    if ($newDisplay === '') sendError('Neuer Anzeigename fehlt.', 400);
+    if (strlen($newDisplay) > 512) sendError('Anzeigename zu lang.', 400);
+
+    $userDir = $usersDir . '/' . $currentUser;
+    if (!is_dir($userDir)) sendError('Benutzer nicht gefunden.', 404);
+
+    $settingsFile = $userDir . '/.settings';
+    $settings = [];
+    if (file_exists($settingsFile)) {
+        $raw = @file_get_contents($settingsFile);
+        if ($raw !== false) {
+            $decoded = json_decode($raw, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $settings = $decoded;
+            }
+        }
+    }
+
+    // Setze/überschreibe das Feld displayName
+    // Sanitisieren und normalisieren (erlaubt Emojis)
+    $san = sanitizeDisplayName($newDisplay);
+    if ($san === '') sendError('Anzeigename ist ungültig oder wurde nach Sanitisierung leer.', 400);
+    $settings['displayName'] = $san;
+    $payload = json_encode($settings, JSON_UNESCAPED_UNICODE);
+    if ($payload === false) sendError('Server-Fehler beim JSON-Encoding.', 500);
+
+    if (!atomicReplaceFile($settingsFile, $payload)) {
+        if (file_put_contents($settingsFile, $payload, LOCK_EX) === false) sendError('Konnte Einstellungen nicht speichern.', 500);
+    }
+    @chmod($settingsFile, 0640);
+
+    echo json_encode(['success' => true, 'message' => 'Anzeigename gespeichert']);
+    exit;
+}
+
 // E-Mail ändern (nur für angemeldete Benutzer, aktuelle Passwort-Bestätigung erforderlich)
 if ($action === 'change_email') {
     // Nur Session-basierte Auth erlaubt (Vermeidet Namens-Mismatch beim Umbenennen)
@@ -433,10 +491,25 @@ if ($action === 'change_email') {
     if ($stored === false || $stored === '') sendError('Benutzer-Passwort nicht gesetzt.', 500);
     if (!password_verify($password, $stored)) sendError('Ungültiges Passwort.', 401);
 
-    $emailFile = $userDir . '/.email';
-    // Atomic write bevorzugen
-    if (!atomicReplaceFile($emailFile, $newEmail)) {
-        if (file_put_contents($emailFile, $newEmail, LOCK_EX) === false) sendError('Konnte E-Mail nicht speichern.', 500);
+    $emailFile = $userDir . '/.settings';
+    // Merge mit vorhandenen Settings (falls vorhanden), um Felder wie displayName zu erhalten
+    $settings = [];
+    if (file_exists($emailFile)) {
+        $raw = @file_get_contents($emailFile);
+        if ($raw !== false) {
+            $decoded = json_decode($raw, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $settings = $decoded;
+            }
+        }
+    }
+
+    // Setze/sanitisiere E-Mail-Feld
+    $settings['email'] = $newEmail;
+    $payload = json_encode($settings, JSON_UNESCAPED_UNICODE);
+    if ($payload === false) sendError('Server-Fehler beim JSON-Encoding.', 500);
+    if (!atomicReplaceFile($emailFile, $payload)) {
+        if (file_put_contents($emailFile, $payload, LOCK_EX) === false) sendError('Konnte E-Mail nicht speichern.', 500);
     }
     @chmod($emailFile, 0640);
 
@@ -603,10 +676,17 @@ if ($action === 'list') {
         $jsonData = json_decode($jsonContent, true);
         $itemCount = 0;
         if (isset($jsonData['active']) && is_array($jsonData['active'])) $itemCount += count($jsonData['active']);
+        // Bestimme, ob die Datei geteilt ist (mehrere Hardlinks -> nlink > 1)
+        $isShared = false;
+        $st = @stat($file);
+        if ($st !== false && isset($st['nlink']) && $st['nlink'] > 1) {
+            $isShared = true;
+        }
         $list[] = [
             'filename' => $filename,
             'itemCount' => $itemCount,
             'lastModified' => verstaendlicheZeitangabe(filemtime($file)),
+            'shared' => $isShared
         ];
         
     }
@@ -802,6 +882,145 @@ if ($action === 'sync') {
     exit;
 }
 
+if ($action === 'download') {
+    // Zwei-Phasen-Ansatz:
+    // POST: Erzeuge ein ZIP-Archiv des Benutzerverzeichnisses und gib ein Token zurück.
+    // GET (Parameter: download): Liefert das zuvor erzeugte ZIP per Direktdownload und löscht die Datei.
+
+    // Wenn POST: Erstelle das Archiv
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        if ($userDir === null) sendError('Kein Benutzer angegeben.', 400);
+        if (!is_dir($userDir)) sendError('Benutzerverzeichnis nicht gefunden.', 404);
+        if (!class_exists('ZipArchive')) sendError('Zip-Archiv-Unterstützung auf dem Server fehlt.', 500);
+
+        // Temporäres Verzeichnis innerhalb des data-Verzeichnisses: $dataDirBase/tmp
+        $tmpDir = rtrim($dataDirBase, '/\\') . '/tmp';
+        if (!is_dir($tmpDir) && !@mkdir($tmpDir, 0750, true)) sendError('Konnte temporäres Verzeichnis nicht anlegen.', 500);
+        if (!is_writable($tmpDir)) sendError('Temporäres Verzeichnis ist nicht beschreibbar.', 500);
+
+        try {
+            $token = bin2hex(random_bytes(16));
+        } catch (Exception $e) {
+            sendError('Konnte Token nicht erzeugen.', 500);
+        }
+
+        $zipPath = $tmpDir . '/' . $token . '.zip';
+        $zip = new ZipArchive();
+        if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+            sendError('Konnte Zip-Datei nicht erzeugen.', 500);
+        }
+
+        // Rekursiv alle Dateien im Benutzerverzeichnis hinzufügen (Behalte relative Pfade bei).
+        $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($userDir, FilesystemIterator::SKIP_DOTS));
+        // Normalisiere Basis-Pfad
+        $userDirReal = realpath($userDir) ?: $userDir;
+        $userDirNorm = str_replace('\\', '/', rtrim($userDirReal, '/\\'));
+        $baseLen = strlen($userDirNorm);
+        foreach ($it as $file) {
+            /** @var SplFileInfo $file */
+            $real = $file->getRealPath();
+            if ($real === false) continue;
+            $realNorm = str_replace('\\', '/', $real);
+            // berechne relativen Pfad; wenn nicht möglich, benutze basename als Fallback
+            $relative = '';
+            if (strpos($realNorm, $userDirNorm . '/') === 0) {
+                $relative = substr($realNorm, $baseLen + 1);
+            } elseif (strpos($realNorm, $userDirNorm) === 0) {
+                $relative = ltrim(substr($realNorm, $baseLen), '/');
+            } else {
+                $relative = basename($realNorm);
+            }
+            if ($relative === '' || $relative === false) continue;
+            // Aus Sicherheitsgründen bestimmte Dateien/Verzeichnisse ausschließen
+            // z.B. Passwort-, Settings- und Token-Dateien
+            if ($relative === '.password') continue;
+            if (strpos($relative, 'tokens/') === 0 || strpos($relative, 'tokens\\') === 0) continue;
+            // Vermeide, dass Zip-Einträge mit reinem Pfadseparator oder ähnlichem entstehen
+            $relative = ltrim($relative, '/\\');
+            if ($relative === '') continue;
+            $zip->addFile($real, $relative);
+        }
+
+        $zip->close();
+
+        if (!file_exists($zipPath)) sendError('Archiv konnte nicht erstellt werden.', 500);
+
+        // Gib Token zurück, der anschließend per GET zum Download verwendet werden kann.
+        echo json_encode(['success' => true, 'token' => $token, 'message' => 'Archiv erstellt']);
+        exit;
+    }
+
+    // Wenn GET: Datei ausliefern (download=TOKEN)
+    $token = isset($_GET['download']) ? trim((string)$_GET['download']) : '';
+    if ($token === '') sendError('Kein Download-Token angegeben.', 400);
+    if (!preg_match('/^[a-f0-9]{32}$/', $token)) sendError('Ungültiges Download-Token.', 400);
+
+    $zipPath = rtrim($dataDirBase, '/\\') . '/tmp/' . $token . '.zip';
+    if (!file_exists($zipPath)) sendError('Archiv nicht gefunden.', 404);
+
+    // Direkter Download-Stream
+    header('Content-Type: application/zip');
+    $downloadName = ($reqUsername && preg_match($usernameMatch, $reqUsername)) ? $reqUsername . '-data.zip' : 'user-data.zip';
+    header('Content-Disposition: attachment; filename="' . basename($downloadName) . '"');
+    header('Content-Length: ' . filesize($zipPath));
+    // Sicherstellen, dass keine vorherigen Ausgaben stören
+    while (ob_get_level()) ob_end_clean();
+    readfile($zipPath);
+    // Datei optional löschen
+    @unlink($zipPath);
+    exit;
+}
+
+// Account löschen (dauerhaft) - erfordert Passwort-Bestätigung und Session-Auth
+if ($action === 'delete_account' || $action === 'quit_account') {
+    // Nur Session-basierte Auth erlaubt für Löschung (vermeidet Missbrauch durch token-exchange)
+    $currentUser = $_SESSION['auth_user'] ?? null;
+    if ($currentUser === null) sendError('Nicht autorisiert.', 401);
+
+    if (!isset($data['password']) || $data['password'] === '') sendError('Passwort fehlt.', 400);
+    $password = (string)$data['password'];
+
+    $userDirPath = $usersDir . '/' . $currentUser;
+    $passwordFile = $userDirPath . '/.password';
+    if (!file_exists($passwordFile)) sendError('Benutzer nicht gefunden.', 404);
+    $stored = @file_get_contents($passwordFile);
+    if ($stored === false || $stored === '') sendError('Benutzer-Passwort nicht gesetzt.', 500);
+    if (!password_verify($password, $stored)) sendError('Ungültiges Passwort.', 401);
+
+    // Sicherheits-Check: validiere Pfad
+    if (!validatePath($usersDir, $currentUser)) sendError('Ungültiger Pfad.', 400);
+
+    // Rekursives Löschen des Benutzerverzeichnisses
+    $err = false;
+    $delErrMsg = '';
+    try {
+        $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($userDirPath, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);
+        foreach ($it as $entry) {
+            if ($entry->isDir()) {
+                @rmdir($entry->getRealPath());
+            } else {
+                @unlink($entry->getRealPath());
+            }
+        }
+        @rmdir($userDirPath);
+    } catch (Throwable $e) {
+        $err = true;
+        $delErrMsg = $e->getMessage();
+    }
+
+    if ($err) sendError('Konnte Benutzerdaten nicht vollständig löschen: ' . $delErrMsg, 500);
+
+    // Session/Cookies entfernen und logout
+    if (isset($_SESSION['auth_user'])) unset($_SESSION['auth_user']);
+    try { session_unset(); session_destroy(); } catch (Throwable $e) {}
+    setcookie('token', '', [ 'expires' => time() - 3600, 'path' => '/', 'secure' => true, 'httponly' => true, 'samesite' => 'Strict' ]);
+    setcookie('username', '', [ 'expires' => time() - 3600, 'path' => '/', 'secure' => true, 'httponly' => false, 'samesite' => 'Strict' ]);
+
+    echo json_encode(['success' => true, 'message' => 'Account und alle Daten wurden gelöscht']);
+    exit;
+}
+
+
 sendError('Ungültige Daten empfangen', 400);
 
 // ----------------- Hilfsfunktionen -----------------
@@ -812,30 +1031,39 @@ function sendError(string $message, int $httpCode = 400): void {
 }
 
 /**
- * Überprüft, dass ein vom Nutzer angegebener relativer Pfad innerhalb des Basisverzeichnisses bleibt.
- * Diese Funktion ist tolerant gegenüber Dateien, die noch nicht existieren: Sie ermittelt den realpath
- * des Basisverzeichnisses und des Verzeichnisses des Kandidaten und stellt sicher, dass der Kandidat
- * innerhalb der Basis liegt.
+ * Stellt sicher, dass $rel nicht über das Basisverzeichnis $base hinausgeht.
+ * @param string $base Das Basisverzeichnis (z.B. userDir). MUSS ein echtes Verzeichnis sein.
+ * @param string $rel Der relative Pfad (z.B. 'list.json' oder '../hacked.json').
+ * @return bool True, wenn $rel innerhalb von $base liegt.
  */
-function validatePath(string $base, string $userPath): bool {
-    $realBase = realpath($base);
-    if ($realBase === false) return false;
-
-    // Normalisiere den vom Nutzer gelieferten Pfad (vermeide Directory-Traversal durch Verwendung von basename)
-    $candidate = $base . '/' . $userPath;
-
-    // Falls der Kandidat existiert: realpath ermitteln und vergleichen
-    $realCandidate = realpath($candidate);
-    if ($realCandidate !== false) {
-        return strpos($realCandidate, $realBase) === 0;
+function validatePath(string $base, string $rel): bool {
+    // 1. Den relativen Pfad zuerst bereinigen, um jegliche Path Traversal Sequenzen zu entfernen.
+    // Dies entfernt alle '..', './', '/' und '..\' aus $rel, falls sie überhaupt vorhanden wären.
+    $normalizedRel = str_replace(['../', './', '/', '\\', '..\\'], '', $rel);
+    
+    // Prüfe: Wurde der Pfad manipuliert?
+    if ($rel !== $normalizedRel) {
+        return false;
     }
 
-    // Falls der Kandidat noch nicht existiert (z. B. beim Anlegen einer neuen Datei),
-    // stelle sicher, dass sein übergeordnetes Verzeichnis innerhalb des Basisverzeichnisses liegt.
-    $candidateDir = dirname($candidate);
-    $realCandidateDir = realpath($candidateDir);
-    if ($realCandidateDir === false) return false;
-    return strpos($realCandidateDir, $realBase) === 0;
+    // 2. Den vollen Pfad erstellen und normalisieren.
+    // realpath() liefert FALSE, wenn der Pfad NICHT EXISTIERT.
+    $fullPath = realpath($base . '/' . $rel);
+    $basePath = realpath($base);
+    
+    // 3. Fall: Der Pfad existiert NICHT (z.B. neue Datei wird erstellt)
+    if ($fullPath === false) {
+        // Bessere Prüfung für nicht-existierende Pfade:
+        // Wir prüfen nur, ob der Pfad in $rel keine hochkletternden Verzeichnisse enthält.
+        if (strpos($rel, '..') !== false) {
+             return false; // Path Traversal versucht
+        }
+        return true; // Pfad ist sauber, existiert aber nicht.
+    }
+
+    // 4. Fall: Der Pfad existiert (Standard-Sicherheitsprüfung)
+    // strpos() ist performanter als substr()
+    return strpos($fullPath, $basePath) === 0;
 }
 
 function verstaendlicheZeitangabe($timestamp) {
@@ -919,6 +1147,55 @@ function atomicReplaceFile(string $path, string $content): bool {
         return false;
     }
     return true;
+}
+
+/**
+ * Sanitize a user-provided display name while allowing emojis.
+ * Steps:
+ * - Trim whitespace
+ * - Remove ASCII control characters (0x00-0x1F, 0x7F) to avoid injection/formatting issues
+ * - Normalize to NFC if possible
+ * - Collapse repeated whitespace into single spaces and remove CR/LF
+ * - Enforce a maximum length in characters (UTF-8 aware)
+ * Returns the sanitized string (may be empty if input was only invalid chars).
+ */
+function sanitizeDisplayName(string $input): string {
+    // Trim
+    $s = trim($input);
+    if ($s === '') return '';
+
+    // Remove ASCII control chars (keep Unicode formatting like ZWJ for emojis)
+    $s = preg_replace('/[\x00-\x1F\x7F]+/u', '', $s);
+    if ($s === null) $s = '';
+
+    // Remove CR/LF and replace with space
+    $s = str_replace(["\r", "\n"], ' ', $s);
+
+    // Collapse multiple whitespace into single space
+    $s = preg_replace('/\s+/u', ' ', $s);
+    if ($s === null) $s = '';
+
+    // Unicode normalize to NFC if ext available
+    if (class_exists('Normalizer') && defined('Normalizer::FORM_C')) {
+        $s = Normalizer::normalize($s, Normalizer::FORM_C) ?: $s;
+    }
+
+    // Trim again after replacements
+    $s = trim($s);
+
+    // Max length (characters, UTF-8 aware). Use grapheme if available.
+    $max = 512;
+    if (function_exists('grapheme_strlen')) {
+        if (grapheme_strlen($s) > $max) {
+            $s = grapheme_substr($s, 0, $max);
+        }
+    } else {
+        if (mb_strlen($s, 'UTF-8') > $max) {
+            $s = mb_substr($s, 0, $max, 'UTF-8');
+        }
+    }
+
+    return $s;
 }
 
 /**

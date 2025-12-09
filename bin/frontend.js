@@ -62,19 +62,28 @@ function replaceUnderscoresWithSpaces(text) {
 function getFilenameFromUrl() {
   const search = window.location.search;
   if (!search || search === "?") return "";
-  const raw = search.substring(1);
-  const parts = raw.split('&');
-  for (let p of parts) {
-    const kv = p.split('=');
-    const key = decodeURIComponent(kv[0] || '');
-    if (key === '') continue;
-    if (key === 'user') continue; // Benutzer-Parameter überspringen
-    return key;
+
+  const skip = new Set(['user', 'token', 'share', 'download','invite']);
+
+  try {
+    const params = new URLSearchParams(search);
+    for (const [key] of params.entries()) {
+      const decodedKey = decodeURIComponent(key || '');
+      if (!decodedKey) continue;
+      if (skip.has(decodedKey)) continue;
+      return decodedKey;
+    }
+  } catch (e) {
+    // Falls URLSearchParams aus irgendeinem Grund fehlschlägt, versuchen wir Fallback-Parsing
   }
-  // Fallback: gib die gesamte rohe Zeichenkette zurück
+
+  // Fallback: gesamte rohe Query zurückgeben (ohne führendes '?'), damit alte URLs
+  // wie "?liste" oder spezielle Fälle weiterhin funktionieren.
+  const raw = search.substring(1);
+  if (!raw) return "";
   try {
     return decodeURIComponent(raw);
-  } catch {
+  } catch (e) {
     return raw;
   }
 }
@@ -373,11 +382,58 @@ function acceptSharedToken(token) {
 let _syncIntervalId = null;
 // Aktueller Zustand der geladenen Liste: true wenn die Liste geteilt ist (Backend-Flag `shared`)
 let _currentListShared = false;
+// Zeitpunkt, wann der aktive Sync gestartet wurde (ms seit Epoch)
+let _syncingStartedAt = 0;
 function stopPeriodicSync() {
   if (_syncIntervalId) {
     clearInterval(_syncIntervalId);
     _syncIntervalId = null;
   }
+}
+
+// Visuelles Sync-Indikator setzen
+function _setSyncIndicator(on) {
+  try {
+    const el = document.getElementById('syncIndicator');
+    if (!el) return;
+    if (on) {
+      el.classList.add('active');
+      el.setAttribute('aria-hidden', 'false');
+      el.setAttribute('title', 'Automatischer Sync aktiv');
+    } else {
+      el.classList.remove('active');
+      el.setAttribute('aria-hidden', 'true');
+    }
+  } catch (e) {}
+}
+
+function _showActiveSync(on) {
+  try {
+    const el = document.getElementById('syncIndicator');
+    if (!el) return;
+    const MIN_VISIBLE_MS = 1000; // minimale Sichtbarkeitsdauer, damit Animation sichtbar wird
+    if (on) {
+      // Startzeit merken
+      _syncingStartedAt = Date.now();
+      // Klasse setzen und einen Reflow erzwingen, damit die CSS-Animation wirklich startet
+      el.classList.add('syncing');
+      // force reflow
+      void el.offsetWidth;
+    } else {
+      // Wenn noch nicht lange genug sichtbar, verzögere das Entfernen
+      const started = _syncingStartedAt || 0;
+      const elapsed = Date.now() - started;
+      if (started === 0 || elapsed >= MIN_VISIBLE_MS) {
+        el.classList.remove('syncing');
+        _syncingStartedAt = 0;
+      } else {
+        setTimeout(() => {
+          try { el.classList.remove('syncing'); } catch (e) {}
+          _syncingStartedAt = 0;
+        }, MIN_VISIBLE_MS - elapsed);
+      }
+    }
+  } catch (e) {}
 }
 
 function startPeriodicSync(filename) {
@@ -386,16 +442,18 @@ function startPeriodicSync(filename) {
   // Starte periodischen Sync nur, wenn die aktuell geladene Liste als geteilt markiert ist
   if (!_currentListShared) {
     console.debug('Periodischer Sync deaktiviert: Liste ist nicht geteilt');
+    _setSyncIndicator(false);
     return;
   }
   // Initiale Verzögerung bis zum ersten Sync: 60s
   _syncIntervalId = setInterval(() => syncNow(filename), syncInterval);
+  _setSyncIndicator(true);
 }
 
 function syncNow(filename) {
   if (!filename) filename = document.getElementById("filename")?.value.trim() || getFilenameFromUrl() || "liste";
   if (!filename) return;
-
+  _showActiveSync(true);
   const activeItems = Array.from(document.querySelectorAll("#itemList li")).map((li) =>
     li.querySelector(".itemText").textContent.trim()
   );
@@ -471,6 +529,9 @@ function syncNow(filename) {
     })
     .catch((err) => {
       showStatus(`Server nicht erreichbar`, "error");
+    })
+    .finally(() => {
+      _showActiveSync(false);
     });
 }
 
@@ -1400,6 +1461,10 @@ function showServerLists(lists) {
 
     const shareBtn = document.createElement('button');
     shareBtn.className = 'shareBtn';
+    if (list.shared) {
+      shareBtn.classList.add('shared');
+    }
+
     shareBtn.title = 'Teilen';
 
     const editBtn = document.createElement('button');
@@ -1672,38 +1737,7 @@ document.addEventListener("DOMContentLoaded", function () {
   if (isAuthenticated()) {
     if (loginDiv) loginDiv.style.display = "none";
 
-    // Setze die Überschrift der Übersichtsseite auf "<Benutzer>s Zettel" (z.B. "Daniels Zettel").
-    try {
-      const userHeading = document.getElementById('userNamesZettel');
-      if (userHeading) {
-        // Versuche serverseitig injizierten `username` zu verwenden,
-        // andernfalls Fallback auf das clientseitige `username`-Cookie.
-        let uname = null;
-          try { if (typeof username !== 'undefined' && username) uname = String(username); } catch (e) {}
 
-        if (!uname) {
-          try {
-            const m = document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith('username='));
-            if (m) {
-              const v = m.substring('username='.length);
-              try { uname = decodeURIComponent(v); } catch (e) { uname = v; }
-              if (uname === 'undefined' || uname === '') uname = null;
-            }
-          } catch (e) { /* ignorieren */ }
-        }
-
-        if (uname) {
-          // Wenn der Name auf 's', 'x' oder 'z' endet, nutze die Form mit Apostroph: "Markus' Zettel"
-          if (uname.endsWith('s') || uname.endsWith('x') || uname.endsWith('z')) {
-            userHeading.textContent = uname + "' Zettel";
-          } else {
-            userHeading.textContent = uname + 's Zettel';
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('Konnte Benutzerüberschrift nicht setzen', e);
-    }
 
     if (urlFilename) {
       if (listElements) listElements.style.display = "";
@@ -1947,8 +1981,98 @@ document.addEventListener("DOMContentLoaded", function () {
     document.getElementById('menuShowHelp')?.addEventListener('click', (e) => {
       e.stopPropagation(); closeMoreMenu(); openHelp();
     });
+    document.getElementById('menuDataProtection')?.addEventListener('click', (e) => {
+      e.stopPropagation(); closeMoreMenu(); _openModal('dataProtectionModal', '#downloadUserDataBtn');
+    });
     document.getElementById('menuChangeEMail')?.addEventListener('click', (e) => {
       e.stopPropagation(); closeMoreMenu(); openChangeEmailModal();
+    });
+    // Datenschutz-Modal: Schließen-Handler (Button + Klick auf Hintergrund)
+    const _dataProtectionModal = document.getElementById('dataProtectionModal');
+    const _closeDataProtectionBtn = document.getElementById('closeDataProtection');
+    function closeDataProtection() { try { _closeModal('dataProtectionModal'); } catch (e) {} }
+    if (_closeDataProtectionBtn) _closeDataProtectionBtn.addEventListener('click', (e) => { e.preventDefault(); closeDataProtection(); });
+    if (_dataProtectionModal) _dataProtectionModal.addEventListener('click', (e) => { if (e.target === _dataProtectionModal) closeDataProtection(); });
+    // Daten-Download & Account-Löschen Buttons
+    const _downloadUserDataBtn = document.getElementById('downloadUserDataBtn');
+    if (_downloadUserDataBtn) {
+      _downloadUserDataBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        const btn = _downloadUserDataBtn;
+        try { btn.disabled = true; } catch (e) {}
+        showStatus('Erzeuge Archiv, bitte warten...', 'change');
+
+        fetch('bin/backend.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'download', username: typeof username !== 'undefined' ? username : undefined })
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            if (data && data.success && data.token) {
+              const url = 'bin/backend.php?download=' + encodeURIComponent(data.token);
+              setTimeout(() => { window.location.href = url; try { btn.disabled = false; } catch (e) {} }, 150);
+              showStatus('Download wird gestartet...', 'change');
+            } else {
+              try { btn.disabled = false; } catch (e) {}
+              showStatus((data && (data.error || data.message)) ? (data.error || data.message) : 'Fehler beim Erstellen des Archivs.', 'error');
+            }
+          })
+          .catch((err) => {
+            try { btn.disabled = false; } catch (e) {}
+            showStatus('Fehler beim Anfordern des Archivs: ' + (err && err.message ? err.message : err), 'error');
+          });
+      });
+    }
+
+    const _quitAccountBtn = document.getElementById('quitAccountBtn');
+    if (_quitAccountBtn) _quitAccountBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      try { closeMoreMenu(); } catch (e) {}
+      try { _openModal('confirmDeleteModal', '#confirmDeletePassword'); } catch (e) {}
+    });
+
+    // Confirm-Delete Modal Buttons
+    const _confirmDeleteModal = document.getElementById('confirmDeleteModal');
+    const _confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+    const _cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
+    const _closeConfirmDelete = document.getElementById('closeConfirmDelete');
+    function _closeConfirmDeleteModal() { try { _closeModal('confirmDeleteModal'); } catch (e) {} }
+    if (_cancelDeleteBtn) _cancelDeleteBtn.addEventListener('click', (e) => { e.preventDefault(); _closeConfirmDeleteModal(); });
+    if (_closeConfirmDelete) _closeConfirmDelete.addEventListener('click', (e) => { e.preventDefault(); _closeConfirmDeleteModal(); });
+    if (_confirmDeleteBtn) _confirmDeleteBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      try { _confirmDeleteBtn.disabled = true; } catch (e) {}
+      const pwd = document.getElementById('confirmDeletePassword')?.value || '';
+      if (!pwd) { showStatus('Bitte das aktuelle Passwort eingeben.', 'error'); try { _confirmDeleteBtn.disabled = false; } catch (e) {} return; }
+      try {
+        showStatus('Lösche Konto...', 'change');
+        const resp = await fetch('bin/backend.php', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'delete_account', password: pwd, username: typeof username !== 'undefined' ? username : undefined }),
+        });
+        let data = null; try { data = await resp.json(); } catch (e) { data = null; }
+        if (!resp.ok) {
+          const msg = data && (data.error || data.message) ? (data.error || data.message) : ('Server antwortet mit ' + resp.status);
+          showStatus('Fehler beim Löschen des Kontos: ' + msg, 'error');
+        } else if (!data) {
+          showStatus('Ungültige Serverantwort beim Löschen des Kontos.', 'error');
+        } else if (data.success === false) {
+          showStatus(data.error || data.message || 'Fehler beim Löschen des Kontos.', 'error');
+        } else {
+          // Erfolg: Session beendet, weiterleiten zur Startseite
+          _closeConfirmDeleteModal();
+          showStatus('Konto gelöscht. Weiterleitung...', 'change');
+          setTimeout(() => { window.location.href = window.location.origin + window.location.pathname; }, 900);
+        }
+      } catch (err) {
+        console.error('Fehler beim Löschen des Kontos:', err);
+        showStatus('Serverfehler beim Löschen des Kontos.', 'error');
+      } finally {
+        try { _confirmDeleteBtn.disabled = false; } catch (e) {}
+      }
     });
     document.getElementById('menuLogout')?.addEventListener('click', (e) => {
       e.stopPropagation(); closeMoreMenu(); doLogout();
@@ -2080,6 +2204,52 @@ document.addEventListener("DOMContentLoaded", function () {
     if (!el) return;
     el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); changeUsername(); } });
   });
+
+  // --- Modal 'Anzeigename ändern' (freie Darstellung, keine Passwort-Abfrage) ---
+  async function changeDisplayName() {
+    const newDisplay = document.getElementById('newDisplayName')?.value?.trim() || '';
+    if (!newDisplay) return showStatus('Bitte einen Anzeigenamen angeben.', 'error');
+    if (newDisplay.length > 512) return showStatus('Anzeigename zu lang.', 'error');
+
+    try {
+      const resp = await fetch('bin/backend.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'change_displayname', newDisplayName: newDisplay })
+      });
+      let data = null; try { data = await resp.json(); } catch (e) { data = null; }
+      if (!resp.ok) {
+        const msg = data && (data.error || data.message) ? (data.error || data.message) : ('Server antwortet mit ' + resp.status);
+        throw new Error(msg);
+      }
+      if (!data || data.success === false) {
+        throw new Error(data && (data.error || data.message) ? (data.error || data.message) : 'Fehler beim Speichern des Anzeigenamens.');
+      }
+
+      // Erfolg: aktualisiere UI ohne Neuladen
+      try {
+        const h = document.getElementById('userNamesZettel');
+        if (newDisplay.endsWith('s') || newDisplay.endsWith('x') || newDisplay.endsWith('z')) {
+            if (h) h.textContent = newDisplay + "’ Zettel";
+          } else {
+            if (h) h.textContent = newDisplay + 's Zettel';
+          }
+      } catch (e) {}
+      showStatus('Anzeigename gespeichert.', 'change');
+      closeChangeUsernameModal();
+    } catch (err) {
+      console.error('Fehler beim Speichern des Anzeigenamens:', err);
+      showStatus(err.message || 'Fehler beim Speichern des Anzeigenamens.', 'error');
+    }
+  }
+
+  // Modal-Buttons (Anzeigename)
+  document.getElementById('changeDisplayNameBtn')?.addEventListener('click', () => changeDisplayName());
+  document.getElementById('cancelChangeDisplayNameBtn')?.addEventListener('click', () => closeChangeUsernameModal());
+
+  // Enter-Taste im Anzeigename-Feld löst Änderung aus
+  (function(){ const el = document.getElementById('newDisplayName'); if (el) el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); changeDisplayName(); } }); })();
 
   // Enter-Taste im Modal löst Passwortänderung aus
   ['currentPassword','newPassword','newPasswordConfirm'].forEach(id => {

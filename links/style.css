@@ -45,6 +45,11 @@ body {
   transition: opacity 0.2s ease-in-out;
 }
 
+p {
+  line-height: 1.5rem;
+  margin: 0;
+}
+
 h1 {
   font-weight: 600;
   hyphens: auto;
@@ -91,6 +96,12 @@ hr {
   border-top: 1px solid #aaa;
   margin: 2px 0;
 }
+
+label {
+    font-size: 1rem;
+        margin-bottom: 0.2rem;
+        display: inline-flex;
+  }
 
 #serverLists li {
   background: #eeeeee;
@@ -194,6 +205,26 @@ li.speiseplan {
 #serverLists .itemText strong {
   color: #000;
 }
+/* Generic button utility classes */
+.btn {
+  display: inline-block;
+  padding: 8px 15px;
+  margin: 5px 2px;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  background-color: #8a8a8a;
+}
+.btn:hover { background-color: #3a3a3a; }
+
+.btn-primary { background-color: #218838; }
+.btn-primary:hover { background-color: #1e7e34; }
+
+.btn-danger { background-color: #dc3545; }
+.btn-danger:hover { background-color: #c82333; }
+
+.btn-ghost { background: none; color: inherit; padding: 6px; border-radius: 4px; }
 
 .editBtn,
 .deleteBtn,
@@ -229,9 +260,14 @@ li.speiseplan {
   transition: background-color 0.15s ease;
 }
 
-.shareBtn:hover {
+.shareBtn:hover,
+.shareBtn.shared:hover {
   background-color: #008AD3;
   transition: background-color 0.15s ease;
+}
+
+.shareBtn.shared {
+  background-color: #a9bdc7;
 }
 
 /* Edit-Button während des Editierens: Häkchen-Symbol */
@@ -260,11 +296,16 @@ input[type="email"] {
   gap: 8px;
   align-items: center;
 }
-.input-row input[type="text"], .input-row input[type="password"], .input-row input[type="email"] {
+
+.input-row input[type="text"],
+.input-row input[type="password"],
+.input-row input[type="email"] {
   flex: 1 1 auto;
-  width: auto; /* override global fixed calc-width */
+  width: auto;
+  /* override global fixed calc-width */
   margin: 0;
 }
+
 .input-row button {
   flex: 0 0 auto;
 }
@@ -283,7 +324,7 @@ input[type="email"] {
 
 
 
-.reset-form input[type="password"]{
+.reset-form input[type="password"] {
   width: calc(100% - 190px);
 }
 
@@ -335,6 +376,7 @@ button:hover {
 }
 
 
+
 .status {
   position: fixed;
   left: 0;
@@ -358,17 +400,22 @@ button:hover {
   color: #ffffff;
 }
 
+p.error {
+  padding: 10px;
+}
+
 .close {
   float: inline-end;
   cursor: pointer;
+
 }
 
 .close::before {
   content: "×";
   display: block;
-  font-size: 2.5rem;
+  font-size: 2.6rem;
   color: #999;
-  line-height: 2rem;
+  line-height: 2.4rem;
 }
 
 /* Dropdown menu for moreBtn */
@@ -407,13 +454,12 @@ button:hover {
   background: #f6f6f6 !important;
 }
 
-/* Drei-Punkte Button neben Logout */
 .more {
   float: inline-end;
   cursor: pointer;
   font-size: 1.6rem;
   color: #999;
-  padding: 5px 0 5px 8px;
+  padding: 7px 0 5px 8px;
   line-height: 1;
   margin-right: 4px;
 }
@@ -433,11 +479,44 @@ button:hover {
   margin-right: 0.5rem;
 }
 
+.syncIndicator {
+  display: none;
+  /* standardmäßig ausgeblendet */
+  width: 28px;
+  height: 28px;
+  background-repeat: no-repeat;
+  background-position: center;
+  float: inline-end;
+  margin-top: 9px;
+}
+
+.syncIndicator.active {
+  display: inline-block;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' %3E%3Cpath stroke='none' d='M0 0h24v24H0z' fill='none'/%3E%3Cpath d='M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4' /%3E%3Cpath d='M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4' /%3E%3C/svg%3E");
+}
+
+.syncIndicator.active.syncing {
+  animation: spin 2s ease-in-out infinite;
+  transform-origin: 50% 50%;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(360deg);
+  }
+
+  to {
+    transform: rotate(0deg);
+  }
+}
+
 /* Modal: Change Password / Username / Invite / Email */
 #changePasswordModal.modal,
 #changeUsernameModal.modal,
 #createInviteModal.modal,
-#changeEmailModal.modal {
+#changeEmailModal.modal,
+#dataProtectionModal.modal,
+#confirmDeleteModal.modal {
   display: none;
   position: fixed;
   inset: 0;
@@ -450,14 +529,18 @@ button:hover {
 #changePasswordModal.modal[aria-hidden="false"],
 #changeUsernameModal.modal[aria-hidden="false"],
 #createInviteModal.modal[aria-hidden="false"],
-#changeEmailModal.modal[aria-hidden="false"] {
+#changeEmailModal.modal[aria-hidden="false"],
+#dataProtectionModal.modal[aria-hidden="false"],
+#confirmDeleteModal.modal[aria-hidden="false"] {
   display: flex;
 }
 
 #changePasswordModal .modal-inner,
 #changeUsernameModal .modal-inner,
 #createInviteModal .modal-inner,
-#changeEmailModal .modal-inner {
+#changeEmailModal .modal-inner,
+#dataProtectionModal .modal-inner,
+#confirmDeleteModal .modal-inner {
   background: #fff;
   padding: 18px;
   border-radius: 8px;
@@ -471,7 +554,10 @@ button:hover {
 #changePasswordModal .modal-close,
 #changeUsernameModal .modal-close,
 #createInviteModal .modal-close,
-#changeEmailModal .modal-close {
+#changeEmailModal .modal-close,
+#dataProtectionModal .modal-close,
+#confirmDeleteModal .modal-close,
+#helpTexts .modal-close {
   position: absolute;
   right: 8px;
   top: 8px;
@@ -485,7 +571,10 @@ button:hover {
 #changePasswordModal .modal-close:hover,
 #changeUsernameModal .modal-close:hover,
 #createInviteModal .modal-close:hover,
-#changeEmailModal .modal-close:hover {
+#changeEmailModal .modal-close:hover,
+#dataProtectionModal .modal-close:hover,
+#confirmDeleteModal .modal-close:hover,
+#helpTexts .modal-close:hover {
   color: #000;
 }
 
@@ -493,14 +582,18 @@ button:hover {
 #changeUsernameModal .modal-title,
 #createInviteModal .modal-title,
 #changeEmailModal .modal-title,
-#helpTexts .modal-title {
+#helpTexts .modal-title,
+#dataProtectionModal .modal-title,
+#confirmDeleteModal .modal-title {
   margin: 0 0 12px 0;
 }
 
 #changePasswordModal .modal-body,
 #changeUsernameModal .modal-body,
 #createInviteModal .modal-body,
-#changeEmailModal .modal-body {
+#changeEmailModal .modal-body,
+#dataProtectionModal .modal-body,
+#confirmDeleteModal .modal-body {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -511,7 +604,8 @@ button:hover {
 #changeUsernameModal .modal-body input[type="password"],
 #changeUsernameModal .modal-body input[type="text"],
 #changeEmailModal .modal-body input[type="password"],
-#changeEmailModal .modal-body input[type="email"] {
+#changeEmailModal .modal-body input[type="email"],
+#confirmDeleteModal .modal-body input[type="password"] {
   width: 100%;
   box-sizing: border-box;
   padding: 8px 10px;
@@ -521,7 +615,9 @@ button:hover {
 #changePasswordModal .modal-actions,
 #changeUsernameModal .modal-actions,
 #createInviteModal .modal-actions,
-#changeEmailModal .modal-actions {
+#changeEmailModal .modal-actions,
+#dataProtectionModal .modal-actions,
+#confirmDeleteModal .modal-actions {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
@@ -530,36 +626,21 @@ button:hover {
 
 #changePasswordModal .modal-actions button,
 #changeUsernameModal .modal-actions button,
-#changeEmailModal .modal-actions button {
+#changeEmailModal .modal-actions button,
+#dataProtectionModal .modal-actions button,
+#confirmDeleteModal .modal-actions button {
   min-width: 84px;
 }
-
-#cancelChangePasswordBtn,
-#cancelChangeUsernameBtn {
-  background-color: #dc3545;
+.note {
+  font-size: 0.9rem;
+  padding: 0.5rem;
+  border-left: 3px solid #6c757d;
+  line-height: 1.2rem;
 }
 
-#cancelChangePasswordBtn,
-#cancelChangeUsernameBtn,
-#cancelChangeEmailBtn {
-  background-color: #dc3545;
-}
-
-#cancelChangePasswordBtn:hover,
-#cancelChangeUsernameBtn:hover,
-#cancelChangeEmailBtn:hover {
-  background-color: #c82333;
-}
-
-#changePasswordBtn,
-#changeUsernameBtn,
-#changeEmailBtn {
-  background-color: #218838;
-}
-#changePasswordBtn:hover,
-#changeUsernameBtn:hover,
-#changeEmailBtn:hover {
-  background-color: #1e7e34;
+.note.warning {
+  border-left-color: #dc3545;
+  background-color: #fff5f5;
 }
 
 .empty-list .empty-list-inner {
@@ -604,19 +685,24 @@ button:hover {
 }
 
 #helpTexts li {
-  display:block;
+  display: block;
 }
 
 #helpTexts li strong {
-  font-weight: 600; 
+  font-weight: 600;
 }
 
 #helpTexts .btn {
-    display: inline-block;
-    border-radius: 5px;
-    height: 24px;
-    width: 28px;
-    margin-bottom: -6px;
+  display: inline-block;
+  border-radius: 5px;
+  height: 24px;
+  width: 28px;
+  margin: 0 0 -6px 0;
+  float:none;
+  padding: 0;
+}
+#helpTexts .btn.syncIndicator.active, #helpTexts .btn.dragHandle {
+  background-color: unset;
 }
 
 /* First Run Banner: styling angepasst an das App-Design */
@@ -637,6 +723,9 @@ button:hover {
 }
 
 @media (max-width: 37rem) {
+  #serverLists li:hover {
+    outline: none;
+  }
 
   #changePasswordModal.modal,
   #changeUsernameModal.modal,
@@ -665,6 +754,7 @@ button:hover {
 .dragging {
   opacity: 0.4;
 }
+
 .dragHandle {
   cursor: grab;
   display: flex;
@@ -837,9 +927,10 @@ li.pending-active .undoBtn:hover {
   input[type="email"] {
     width: calc(100% - 158px);
   }
+
   #serverLists li {
-      padding: 3px 6px;
-    }
+    padding: 3px 6px;
+  }
 
   .editInput {
     font-size: 1.2rem;
@@ -868,6 +959,7 @@ li.pending-active .undoBtn:hover {
   .modified {
     font-size: smaller;
   }
+
 }
 
 
@@ -882,7 +974,7 @@ li.pending-active .undoBtn:hover {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.45);
+  background: rgba(0, 0, 0, 0.45);
   z-index: 1100;
   align-items: center;
   justify-content: center;
@@ -901,7 +993,9 @@ li.pending-active .undoBtn:hover {
   white-space: nowrap !important;
 }
 
-#helpTexts[aria-hidden="false"] { display: flex; }
+#helpTexts[aria-hidden="false"] {
+  display: flex;
+}
 
 .help-inner {
   position: relative;
@@ -912,18 +1006,20 @@ li.pending-active .undoBtn:hover {
   width: 94%;
   max-height: 80vh;
   overflow: auto;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
 }
 
 .help-close {
-    position: absolute;
-    right: 14px;
-    top: 5px;
-    background: none;
-    border: none;
-    font-size: 28px;
-    cursor: pointer;
+  position: absolute;
+  right: 14px;
+  top: 5px;
+  background: none;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
   color: #666;
 }
 
-.help-close:hover { color: #000; }
+.help-close:hover {
+  color: #000;
+}

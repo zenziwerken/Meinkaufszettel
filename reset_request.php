@@ -10,11 +10,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message = 'Wenn ein Konto existiert, schicken wir eine E-Mail mit einem Link.';
     } else {
         $userDir = $usersDir . '/' . $username;
-        $emailFile = $userDir . '/.email';
+        // E-Mail-Adresse wird jetzt in .settings gespeichert
+        $emailFile = $userDir . '/.settings';
         if (!is_dir($userDir) || !file_exists($emailFile)) {
             $message = 'Wenn ein Konto existiert, schicken wir eine E-Mail mit einem Link.';
         } else {
-            $emailRaw = trim(@file_get_contents($emailFile));
+            $emailRaw = '';
+            $raw = @file_get_contents($emailFile);
+            if ($raw !== false) {
+                $decoded = json_decode($raw, true);
+                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded) && isset($decoded['email'])) {
+                    $emailRaw = trim((string)$decoded['email']);
+                } else {
+                    // Fallback: alte Installation könnte noch plain-text E-Mail enthalten
+                    $emailRaw = trim($raw);
+                }
+            }
+
             if ($emailRaw === '' || !filter_var($emailRaw, FILTER_VALIDATE_EMAIL)) {
                 $message = 'Kein gültiges E-Mail-Konto für diesen Benutzer konfiguriert.';
             } else {
