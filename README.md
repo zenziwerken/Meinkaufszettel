@@ -58,8 +58,8 @@ cd Meinkaufszettel
 
 ### 2. Verzeichnisse erstellen
 ```bash
-mkdir -p data/{user,invites,shares,resets,tmp}
-chmod 750 data data/user data/invites data/shares data/resets data/tmp
+mkdir -p data
+chmod 750 data
 ```
 
 ### 3. Webserver konfigurieren
@@ -155,29 +155,6 @@ $invalidResetKeepDays = 30;    // Reset-Tokens
 $challengeMaxAgeDays = 365;    // Challenge-Dateien
 ```
 
-## 🔧 Wartung
-
-### Alte Dateien aufräumen
-Erstelle einen Cronjob für `bin/cleanup.php` (wenn vorhanden):
-```bash
-0 3 * * * cd /pfad/zu/Meinkaufszettel && php bin/cleanup.php
-```
-
-### Backup
-```bash
-# Vollständiges Backup
-tar -czf backup-$(date +%Y%m%d).tar.gz data/ bin/config.php
-
-# Nur Benutzerdaten
-tar -czf userdata-$(date +%Y%m%d).tar.gz data/user/
-```
-
-### Updates
-```bash
-git pull origin main
-# Prüfe bin/config.php auf neue Optionen
-```
-
 ## 📖 Nutzung
 
 ### Listen verwalten
@@ -215,11 +192,6 @@ MIT License - siehe [LICENSE](LICENSE) Datei für Details.
 - **Icons**: Tabler Icons
 - **Font**: Alan Sans (Open Source)
 - **Hintergrund**: Streamline (Plump Line - Food & Drink)
-
-## 📞 Support & Kontakt
-
-- **Issues**: [GitHub Issues](https://github.com/zenziwerken/Meinkaufszettel/issues)
-- **Diskussionen**: [GitHub Discussions](https://github.com/zenziwerken/Meinkaufszettel/discussions)
 
 ---
 
