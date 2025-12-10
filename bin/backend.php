@@ -2,6 +2,7 @@
 declare(strict_types=1);
 session_start();
 require __DIR__ . '/config.php';
+require __DIR__ . '/helper.php';
 
 header('Content-Type: application/json');
 
@@ -20,38 +21,6 @@ if ($normalizedOrigin !== '' && in_array($normalizedOrigin, $allowedOrigins, tru
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
     exit;
-}
-
-// --- Sicherstellen, dass Basisdaten- und Invite-Verzeichnisse existieren (sichere Berechtigungen) ---
-if (!is_dir($dataDirBase) && !@mkdir($dataDirBase, 0750, true)) {
-    sendError('Server-Fehler: Speicher-Basisverzeichnis nicht verfügbar.', 500);
-}
-if (!is_writable($dataDirBase)) {
-    sendError('Speicher-Basisverzeichnis ist nicht beschreibbar.', 500);
-}
-if (!is_dir($invitesDir) && !@mkdir($invitesDir, 0750, true)) {
-    sendError('Server-Fehler: Einladungs-Verzeichnis nicht verfügbar.', 500);
-}
-if (!is_writable($invitesDir)) {
-    sendError('Einladungs-Verzeichnis ist nicht beschreibbar.', 500);
-}
-if (!is_dir($usersDir) && !@mkdir($usersDir, 0750, true)) {
-    sendError('Server-Fehler: User-Verzeichnis nicht verfügbar.', 500);
-}
-if (!is_writable($usersDir)) {
-    sendError('User-Verzeichnis ist nicht beschreibbar.', 500);
-}
-if (!is_dir($sharesDir) && !@mkdir($sharesDir, 0750, true)) {
-    sendError('Server-Fehler: Verzeichnis zum Teilen von Listen nicht verfügbar.', 500);
-}
-if (!is_writable($sharesDir)) {
-    sendError('Verzeichnis zum Teilen von Listen nicht ist nicht beschreibbar.', 500);
-}
-if (!is_dir($resetsDir) && !@mkdir($resetsDir, 0750, true)) {
-    sendError('Server-Fehler: Resetverzeichnis nicht verfügbar.', 500);
-}
-if (!is_writable($resetsDir)) {
-    sendError('Resetverzeichnis ist nicht beschreibbar.', 500);
 }
 
 // Erlaube GET nur für den Download-Endpunkt (bin/backend.php?download=TOKEN)
@@ -102,6 +71,8 @@ if ($reqUsername !== null) {
 } else {
     $userDir = null; $userPasswordFile = null; $userTokenDir = null;
 }
+// --- Sicherstellen, dass Basisdaten- und Invite-Verzeichnisse existieren (sichere Berechtigungen) ---
+ensureRequiredDirectories();
 
 if ($action === 'register') {
     // Registrierung nur mit gültigem Invite-Token
@@ -274,14 +245,39 @@ if ($action === 'logout') {
 
 if ($action === 'login') {
     if (!isset($data['password'])) sendError('Ungültige Anfrage: Passwort fehlt.', 400);
-    if ($reqUsername === null) sendError('Kein Benutzer angegeben.', 400);
-    if (!is_dir($userDir)) sendError('Benutzer nicht gefunden.', 404);
+    if ($reqUsername === null) sendError('Bitte Benutzername angegeben.', 400);    
+    
+    $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    if (!checkRateLimit('login_ip', $ip, $maxRequests, $timeWindow)) {
+        header('Retry-After: ' . $timeWindow);
+        sendError('Zu viele Login-Versuche. Bitte warten.', 429);
+    }
+    
+    if (!is_dir($userDir)) sendError('Benutzername oder Passwort falsch.', 404);
     $stored = @file_get_contents($userPasswordFile);
     if ($stored === false || $stored === '') sendError('Benutzer-Passwort nicht gesetzt.', 401);
 
     if (password_verify($data['password'], $stored)) {
+
+        try { session_regenerate_id(true); } catch (Throwable $e) {}
         // Session für diesen Benutzer als authentifiziert markieren
         $_SESSION['auth_user'] = $reqUsername;
+
+        // Datei-basiertes Rate-Limit zurücksetzen (IP und Benutzer), falls vorhanden
+        try {
+            if (function_exists('resetRateLimit')) {
+                // Reset für die IP
+                try { resetRateLimit('login_ip', $ip); } catch (Throwable $_e) {}
+                // Reset für den Benutzernamen (falls verwendet)
+                try { resetRateLimit('login_user', $reqUsername); } catch (Throwable $_e) {}
+            } elseif (function_exists('resetRateLimitsByAction')) {
+                // Fallback: lösche alle login_-Einträge
+                try { resetRateLimitsByAction('login_'); } catch (Throwable $_e) {}
+            }
+        } catch (Throwable $e) {
+            // Nicht fatal: Anmelden soll auch bei Problemen beim Aufräumen weiterhin funktionieren
+        }
+        
         setcookie('username', $reqUsername, [
             'expires' => time() + 15552000, // 180 Tage
             'path' => '/',
@@ -289,8 +285,6 @@ if ($action === 'login') {
             'httponly' => false,
             'samesite' => 'Strict'
         ]);
-
-        if (!is_dir($userTokenDir) && !@mkdir($userTokenDir, 0750, true)) sendError('Server-Fehler: Tokenverzeichnis nicht verfügbar.', 500);
 
         $token = bin2hex(random_bytes(32));
         $tokenHash = hash('sha256', $token);
@@ -308,7 +302,7 @@ if ($action === 'login') {
 
         echo json_encode(['success' => true, 'message' => 'Login erfolgreich']);
     } else {
-        sendError('Ungültiges Passwort.', 401);
+        sendError('Benutzername oder Passwort falsch', 401);
     }
     exit;
 }
@@ -374,13 +368,13 @@ if ($action === 'change_password') {
         }
     }
 
+    // Setze cookie token abgelaufen (sicherer client-fallback)
+    setcookie('token', '', [ 'expires' => time() - 3600, 'path' => '/', 'samesite' => 'Strict' ]);
+
     // Session zurücksetzen (erzwungenes Re-Login)
     if (isset($_SESSION['auth_user'])) unset($_SESSION['auth_user']);
     try { session_regenerate_id(true); } catch (Throwable $e) {}
     try { session_destroy(); } catch (Throwable $e) {}
-
-    // Setze cookie token abgelaufen (sicherer client-fallback)
-    setcookie('token', '', [ 'expires' => time() - 3600, 'path' => '/', 'samesite' => 'Strict' ]);
 
     echo json_encode(['success' => true, 'message' => 'Passwort geändert. Bitte melde dich erneut an.']);
     exit;
@@ -522,7 +516,6 @@ if ($action === 'create_invite') {
     // nur authentifizierte Benutzer dürfen Invites erzeugen
     if (!isset($_SESSION['auth_user']) || $_SESSION['auth_user'] === '') sendError('Nicht autorisiert.', 401);
 
-    if (!is_dir($invitesDir) && !@mkdir($invitesDir, 0750, true)) sendError('Server-Fehler: Invite-Verzeichnis nicht verfügbar.', 500);
     // Erzeuge eindeutigen Token
     $attempts = 0;
     do {
@@ -893,11 +886,6 @@ if ($action === 'download') {
         if (!is_dir($userDir)) sendError('Benutzerverzeichnis nicht gefunden.', 404);
         if (!class_exists('ZipArchive')) sendError('Zip-Archiv-Unterstützung auf dem Server fehlt.', 500);
 
-        // Temporäres Verzeichnis innerhalb des data-Verzeichnisses: $dataDirBase/tmp
-        $tmpDir = rtrim($dataDirBase, '/\\') . '/tmp';
-        if (!is_dir($tmpDir) && !@mkdir($tmpDir, 0750, true)) sendError('Konnte temporäres Verzeichnis nicht anlegen.', 500);
-        if (!is_writable($tmpDir)) sendError('Temporäres Verzeichnis ist nicht beschreibbar.', 500);
-
         try {
             $token = bin2hex(random_bytes(16));
         } catch (Exception $e) {
@@ -1022,223 +1010,3 @@ if ($action === 'delete_account' || $action === 'quit_account') {
 
 
 sendError('Ungültige Daten empfangen', 400);
-
-// ----------------- Hilfsfunktionen -----------------
-function sendError(string $message, int $httpCode = 400): void {
-    http_response_code($httpCode);
-    echo json_encode(['success' => false, 'error' => $message]);
-    exit;
-}
-
-/**
- * Stellt sicher, dass $rel nicht über das Basisverzeichnis $base hinausgeht.
- * @param string $base Das Basisverzeichnis (z.B. userDir). MUSS ein echtes Verzeichnis sein.
- * @param string $rel Der relative Pfad (z.B. 'list.json' oder '../hacked.json').
- * @return bool True, wenn $rel innerhalb von $base liegt.
- */
-function validatePath(string $base, string $rel): bool {
-    // 1. Den relativen Pfad zuerst bereinigen, um jegliche Path Traversal Sequenzen zu entfernen.
-    // Dies entfernt alle '..', './', '/' und '..\' aus $rel, falls sie überhaupt vorhanden wären.
-    $normalizedRel = str_replace(['../', './', '/', '\\', '..\\'], '', $rel);
-    
-    // Prüfe: Wurde der Pfad manipuliert?
-    if ($rel !== $normalizedRel) {
-        return false;
-    }
-
-    // 2. Den vollen Pfad erstellen und normalisieren.
-    // realpath() liefert FALSE, wenn der Pfad NICHT EXISTIERT.
-    $fullPath = realpath($base . '/' . $rel);
-    $basePath = realpath($base);
-    
-    // 3. Fall: Der Pfad existiert NICHT (z.B. neue Datei wird erstellt)
-    if ($fullPath === false) {
-        // Bessere Prüfung für nicht-existierende Pfade:
-        // Wir prüfen nur, ob der Pfad in $rel keine hochkletternden Verzeichnisse enthält.
-        if (strpos($rel, '..') !== false) {
-             return false; // Path Traversal versucht
-        }
-        return true; // Pfad ist sauber, existiert aber nicht.
-    }
-
-    // 4. Fall: Der Pfad existiert (Standard-Sicherheitsprüfung)
-    // strpos() ist performanter als substr()
-    return strpos($fullPath, $basePath) === 0;
-}
-
-function verstaendlicheZeitangabe($timestamp) {
-    $jetzt = time();
-    $diff = $jetzt - $timestamp;
-    
-    // In Minuten umrechnen
-    $minuten = floor($diff / 60);
-    $stunden = floor($diff / 3600);
-    $tage = floor($diff / 86400);
-    
-    if ($minuten < 5) {
-        return "gerade&nbsp;eben&nbsp;geändert";
-    } elseif ($minuten < 15) {
-        return "vor&nbsp;kurzem&nbsp;geändert";
-    } elseif ($minuten < 60) {
-        return "in&nbsp;der letzten Stunde geändert";
-    } elseif ($stunden < 24) {
-        return "vor&nbsp;" . $stunden . "&nbsp;Stunde" . ($stunden != 1 ? "n" : "") . "&nbsp;geändert";
-    } elseif ($stunden < 48)  {
-        return "gestern&nbsp;geändert";
-    } else {
-        return "vor&nbsp;" . $tage . "&nbsp;Tag" . ($tage != 1 ? "en" : "") . "&nbsp;geändert";
-    }
-}
-
-/**
- * Atomisch eine Datei ersetzen (tmp -> rename).
- * Vereinfachte Variante ohne spezielle Symlink-Behandlung (Hardlinks erwartet).
- */
-function atomicReplaceFile(string $path, string $content): bool {
-    // Wenn $path ein Symlink ist, arbeite auf dem Ziel der Symlink
-    $target = $path;
-    if (is_link($path)) {
-        $linkTarget = readlink($path);
-        if ($linkTarget === false) return false;
-        if ($linkTarget[0] !== '/') {
-            $target = dirname($path) . '/' . $linkTarget;
-        } else {
-            $target = $linkTarget;
-        }
-    }
-
-    $targetDir = dirname($target);
-    if (!is_dir($targetDir) && !@mkdir($targetDir, 0750, true)) return false;
-
-    // Wenn die Datei bereits existiert und mehrere Hardlinks hat, schreibe IN-PLACE
-    // damit andere Hardlinks den neuen Inhalt sehen.
-    if (file_exists($target)) {
-        $st = @stat($target);
-        $nlink = 1;
-        if ($st !== false) {
-            $nlink = isset($st['nlink']) ? (int)$st['nlink'] : (isset($st[3]) ? (int)$st[3] : 1);
-        }
-        if ($nlink > 1) {
-            $fp = @fopen($target, 'c+');
-            if ($fp === false) return false;
-            if (!flock($fp, LOCK_EX)) { fclose($fp); return false; }
-            if (!ftruncate($fp, 0)) { flock($fp, LOCK_UN); fclose($fp); return false; }
-            rewind($fp);
-            $written = fwrite($fp, $content);
-            fflush($fp);
-            flock($fp, LOCK_UN);
-            fclose($fp);
-            @chmod($target, 0640);
-            return $written !== false;
-        }
-    }
-
-    // Standard: atomischer Austausch via tmp -> rename
-    $tmp = $targetDir . '/.' . basename($target) . '.tmp-' . bin2hex(random_bytes(6));
-    $written = @file_put_contents($tmp, $content, LOCK_EX);
-    if ($written === false) {
-        @unlink($tmp);
-        return false;
-    }
-    @chmod($tmp, 0640);
-
-    if (!@rename($tmp, $target)) {
-        @unlink($tmp);
-        return false;
-    }
-    return true;
-}
-
-/**
- * Sanitize a user-provided display name while allowing emojis.
- * Steps:
- * - Trim whitespace
- * - Remove ASCII control characters (0x00-0x1F, 0x7F) to avoid injection/formatting issues
- * - Normalize to NFC if possible
- * - Collapse repeated whitespace into single spaces and remove CR/LF
- * - Enforce a maximum length in characters (UTF-8 aware)
- * Returns the sanitized string (may be empty if input was only invalid chars).
- */
-function sanitizeDisplayName(string $input): string {
-    // Trim
-    $s = trim($input);
-    if ($s === '') return '';
-
-    // Remove ASCII control chars (keep Unicode formatting like ZWJ for emojis)
-    $s = preg_replace('/[\x00-\x1F\x7F]+/u', '', $s);
-    if ($s === null) $s = '';
-
-    // Remove CR/LF and replace with space
-    $s = str_replace(["\r", "\n"], ' ', $s);
-
-    // Collapse multiple whitespace into single space
-    $s = preg_replace('/\s+/u', ' ', $s);
-    if ($s === null) $s = '';
-
-    // Unicode normalize to NFC if ext available
-    if (class_exists('Normalizer') && defined('Normalizer::FORM_C')) {
-        $s = Normalizer::normalize($s, Normalizer::FORM_C) ?: $s;
-    }
-
-    // Trim again after replacements
-    $s = trim($s);
-
-    // Max length (characters, UTF-8 aware). Use grapheme if available.
-    $max = 512;
-    if (function_exists('grapheme_strlen')) {
-        if (grapheme_strlen($s) > $max) {
-            $s = grapheme_substr($s, 0, $max);
-        }
-    } else {
-        if (mb_strlen($s, 'UTF-8') > $max) {
-            $s = mb_substr($s, 0, $max, 'UTF-8');
-        }
-    }
-
-    return $s;
-}
-
-/**
- * Erzeugt ein Share-Token und legt eine Tokendatei im $sharesDir an.
- * Rückgabe: der Token-String (Dateiname).
- */
-function shareList(string $username, string $filename): string {
-    global $usersDir, $sharesDir, $filenameMatch, $usernameMatch;
-
-    if (!preg_match($usernameMatch, $username)) sendError('Ungültiger Benutzer.', 400);
-    if (!preg_match($filenameMatch, $filename)) sendError('Ungültiger Listename.', 400);
-
-    $userDir = $usersDir . '/' . $username;
-    $rel = basename($filename) . '.json';
-    if (!validatePath($userDir, $rel)) sendError('Ungültiger Pfad.', 400);
-    $fullPath = $userDir . '/' . $rel;
-    if (!file_exists($fullPath)) sendError('Liste nicht gefunden.', 404);
-
-    if (!is_dir($sharesDir) && !@mkdir($sharesDir, 0750, true)) {
-        sendError('Server-Fehler: Shares-Verzeichnis nicht verfügbar.', 500);
-    }
-
-    // Erzeuge einen einzigartigen Token (hex)
-    $attempts = 0;
-    do {
-        $token = bin2hex(random_bytes(16));
-        $safe = preg_replace('/[^a-zA-Z0-9_-]/', '', $token);
-        $shareFile = $sharesDir . '/' . $safe;
-        $attempts++;
-    } while (file_exists($shareFile) && $attempts < 8);
-
-    if (file_exists($shareFile)) sendError('Konnte eindeutiges Share-Token nicht erzeugen.', 500);
-
-    $payload = json_encode([
-        'sharingUser' => $username,
-        'sharingFilename' => basename($filename)
-    ], JSON_UNESCAPED_UNICODE);
-    if ($payload === false) sendError('Server-Fehler beim JSON-Encoding.', 500);
-
-    if (file_put_contents($shareFile, $payload, LOCK_EX) === false) {
-        sendError('Konnte Share-Token nicht speichern.', 500);
-    }
-    @chmod($shareFile, 0640);
-
-    return $safe;
-}

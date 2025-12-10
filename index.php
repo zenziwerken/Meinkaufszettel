@@ -49,6 +49,9 @@ foreach (array_keys($_GET) as $k) {
         break;
     }
 }
+if ($listName && !preg_match($filenameMatch, $listName)) {
+    $listName = null; // Ungültige Namen ablehnen
+}
 
 $isSpeiseplan   = ($listName === $speiseplanName);
 $cssSpeiseplan  = ($isSpeiseplan) ? 'class="speiseplan"' : '';
@@ -103,7 +106,7 @@ if (!empty($displayName)) {
 
 $createInviteLink = '';
 if ($isAdmin) {
-    $createInviteLink = '<hr><button id="menuCreateInvite" class="menu-item">Einladungslink erstellen</button>';
+    $createInviteLink = '<hr><button id="menuCreateInvite" class="menu-item invite">Einladungslink erstellen</button>';
 }
 ?>
 <!DOCTYPE html>
@@ -119,12 +122,15 @@ if ($isAdmin) {
     <link rel="apple-touch-icon" href="links/apple-touch-icon.png">
     <title>Meinkaufszettel</title>
     <?= $speiseplanCss ?>
+    <style>
+        .help, .modal, #firstRunBanner { display: none; }
+    </style>
 </head>
 
 <body>
     <div class="container">
 
-        <div id="firstRunBanner" style="display:none"></div>
+        <div id="firstRunBanner"></div>
 
         <?php if ($hasInvite && !file_exists($userPasswordFile)): ?>
             <!-- Registrierung -->
@@ -156,7 +162,7 @@ if ($isAdmin) {
                     <form>
                         <input type="text" id="loginUsername" placeholder="Benutzername" autocomplete="username">
                         <input type="password" id="passCode" placeholder="Passwort" autocomplete="current-password">
-                        <button id="loginBtn" class="btn">Anmelden</button>
+                        <button id="loginBtn" class="btn" type="button">Anmelden</button>
                     </form>
                     <div class="forgot-pwd"><a href="reset_request.php" id="forgotPasswordLink">Passwort vergessen?</a></div>
                 </div>
@@ -166,22 +172,22 @@ if ($isAdmin) {
             <div id="listOverview">
                 <span class="more" id="moreBtn" title="Mehr">⋯</span>
                     <div id="moreMenu" class="more-menu" aria-hidden="true" role="navigation">
-                    <button id="menuShowHelp" class="menu-item">Kurzanleitung</button>
+                    <button id="menuShowHelp" class="menu-item help">Kurzanleitung</button>
                     <hr>
-                    <button id="menuChangeUsername" class="menu-item">Benutzername ändern</button>
-                    <button id="menuChangePassword" class="menu-item">Passwort ändern</button>
-                    <button id="menuChangeEMail" class="menu-item">E-Mail ändern</button>
+                    <button id="menuChangeUsername" class="menu-item username">Benutzername ändern</button>
+                    <button id="menuChangePassword" class="menu-item password">Passwort ändern</button>
+                    <button id="menuChangeEMail" class="menu-item email">E-Mail ändern</button>
                     <?= $createInviteLink ?>
                     <hr>
-                    <button id="menuDataProtection" class="menu-item">Datenschutz</button>
+                    <button id="menuDataProtection" class="menu-item dataprodtection">Datenschutz</button>
                     <hr>
-                    <button id="menuLogout" class="menu-item">Abmelden</button>
+                    <button id="menuLogout" class="menu-item logout">Abmelden</button>
                 </div>
                 <span class="icon"></span>
                 <h1 id="userNamesZettel"><?= $userHeadingText ?></h1>
                 <div class="input-row">
                     <input type="text" id="newListItem" placeholder="Ich gehe zu ...">
-                    <button id="addListItemBtn" class="btn">Hinzufügen</button>
+                    <button id="addListItemBtn" class="btn" >Hinzufügen</button>
                 </div>
                 <ul id="serverLists"></ul>
             </div>
@@ -252,7 +258,7 @@ if ($isAdmin) {
                     <div class="modal-body">
                         <form id="changeUsernameForm">
                             <input type="text" name="username" autocomplete="username" value="<?= htmlspecialchars($username ?? '') ?>" tabindex="-1" class="visually-hidden-username" aria-hidden="true">
-                            <label for="newUsername">Neuer Benutzername (Systemname, a-zA-Z0-9_-)</label>
+                            <label for="newUsername">Neuer Benutzername (Login, a-zA-Z0-9_-)</label>
                             <input type="text" id="newUsername" placeholder="Neuer Benutzername (a-zA-Z0-9_-)" autocomplete="username">
                             <input type="password" id="currentPasswordForUsername" placeholder="Aktuelles Passwort" autocomplete="current-password">
                             <div class="modal-actions">
@@ -368,7 +374,6 @@ if ($isAdmin) {
             }).catch(() => {});
         })();
     </script>
-    <!-- Frontend handlers moved to bin/frontend.js -->
     <script src="bin/frontend.js?<?= $scriptVersion ?>"></script>
 </body>
 

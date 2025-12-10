@@ -12,7 +12,7 @@ $maxItemsPerList = 200;
 $maxItemLength = 200; 
 
 // Synchronisations-Intervall für automatischen Abgleich
-$syncInterval = 30 /* Sekunden */ * 1000; 
+$syncInterval = 40 /* Sekunden */ * 1000; 
 
 // Zurück zur Listenansicht nach x Minuten Inaktivität
 $inactivityTimeoutMs = 10 /* Minuten */ * 60 * 1000; 
@@ -47,6 +47,12 @@ $sharesDir      = $dataDirBase . '/shares';
 // Verzeichnis für Passwort-Reset-Tokens
 $resetsDir      = $dataDirBase . '/resets';
 
+// Verzeichnis für Ratelimiting-Daten
+$rateLimitDir   = $dataDirBase . '/ratelimit';
+
+// Temporäres Verzeichnis für Zwischenspeicherungen
+$tmpDir         = $dataDirBase . '/tmp';
+
 // Ablaufzeit eines Reset-Tokens in Sekunden (Standard: 1 Stunde)
 $resetTokenExpiry = 3600;
 
@@ -59,3 +65,10 @@ $invalidResetKeepDays = 30;
 
 // Maximalalter für Challenge-Dateien in Tagen (Standard: 365 Tage ~ 1 Jahr)
 $challengeMaxAgeDays = 365;
+
+// Einfaches Ratelimiting für Passwort-Reset-Anfragen
+// Max. Anfragen
+$maxRequests = 5; 
+
+// Zeitfenster in Sekunden   
+$timeWindow = 600;     

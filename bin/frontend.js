@@ -63,7 +63,7 @@ function getFilenameFromUrl() {
   const search = window.location.search;
   if (!search || search === "?") return "";
 
-  const skip = new Set(['user', 'token', 'share', 'download','invite']);
+  const skip = new Set(['user', 'token', 'share', 'download', 'invite']);
 
   try {
     const params = new URLSearchParams(search);
@@ -81,6 +81,10 @@ function getFilenameFromUrl() {
   // wie "?liste" oder spezielle Fälle weiterhin funktionieren.
   const raw = search.substring(1);
   if (!raw) return "";
+  // Wenn die Query ein Key=Value-Paar enthält (z.B. "invite=..." oder "share=..."),
+  // dann handelt es sich wahrscheinlich um einen Parameter und nicht um einen reinen
+  // Listennamen wie "?meineliste". In diesem Fall nichts zurückgeben.
+  if (raw.indexOf('=') !== -1) return "";
   try {
     return decodeURIComponent(raw);
   } catch (e) {
@@ -151,6 +155,14 @@ function fetchAllLists(onSuccess, onError) {
 
 function loadList() {
   let filename = document.getElementById("filename")?.value.trim() || getFilenameFromUrl() || "liste";
+
+  const skip = new Set(['user', 'token', 'share', 'download','invite']);
+
+  // Verhindere das Laden von speziellen Query-/Parameternamen
+  if (skip.has(filename)) {
+    showStatus("Das Laden dieser Liste ist nicht möglich.", "error");
+    return;
+  }
 
   fetch("bin/backend.php", {
     method: "POST",
@@ -676,22 +688,15 @@ function login() {
     )
     .then((data) => {
       if (data.success) {
-        document.getElementById("login").style.display = "none";
-        document.getElementById("listElements").style.display = "none";
-        document.getElementById("listOverview").style.display = "";
-        
-        // Benutzerüberschrift wird serverseitig gesetzt; kein JS nötig.
-
-        setTimeout(() => {
-          fetchAllLists(showServerLists, (error) => showStatus("Fehler beim Laden der Listen: " + error, "error"));
-        }, 100);
+        showStatus("Anmeldung erfolgreich.", "change");
+        setTimeout(() => { location.reload(); }, 500);
       } else {
         showStatus(data.message || "Falsches Passwort.", "error");
       }
     })
     .catch((error) => showStatus(error.message || "Fehler beim Login: " + error, "error"));
+    
 }
-
 // ==========================================================
 //  Element-Erzeugung (active / inactive)
 // ==========================================================

@@ -1,19 +1,11 @@
 <?php
 require __DIR__ . '/bin/config.php';
+require __DIR__ . '/bin/helper.php';
 if (session_status() === PHP_SESSION_NONE) session_start();
 
 $error = '';
 $success = '';
 
-function atomicWrite(string $path, string $content): bool {
-    $dir = dirname($path);
-    if (!is_dir($dir) && !@mkdir($dir, 0750, true)) return false;
-    $tmp = $dir . '/.' . basename($path) . '.tmp-' . bin2hex(random_bytes(6));
-    if (@file_put_contents($tmp, $content, LOCK_EX) === false) { @unlink($tmp); return false; }
-    @chmod($tmp, 0640);
-    if (!@rename($tmp, $path)) { @unlink($tmp); return false; }
-    return true;
-}
 
 $token = isset($_GET['token']) ? trim((string)$_GET['token']) : (isset($_POST['token']) ? trim((string)$_POST['token']) : '');
 if ($token === '') {
@@ -37,32 +29,39 @@ if ($token === '') {
             $userPasswordFile = $userDir . '/.password';
 
             if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-                $p1 = isset($_POST['password']) ? (string)$_POST['password'] : '';
-                $p2 = isset($_POST['password_confirm']) ? (string)$_POST['password_confirm'] : '';
-                if ($p1 === '' || $p2 === '') {
-                    $error = 'Bitte beide Passwortfelder ausfüllen.';
-                } elseif ($p1 !== $p2) {
-                    $error = 'Passwörter stimmen nicht überein.';
-                } elseif (strlen($p1) < 6) {
-                    $error = 'Neues Passwort ist zu kurz (mindestens 6 Zeichen).';
+                // Server-seitiges Ratelimit für das Setzen eines neuen Passworts (IP-basiert)
+                $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+                if (!checkRateLimit('reset_set_ip', $ip, $maxRequests, $timeWindow)) {
+                    header('Retry-After: ' . $timeWindow);
+                    $error = 'Zu viele Versuche. Bitte warten.';
                 } else {
-                    $hash = password_hash($p1, PASSWORD_DEFAULT);
-                    if ($hash === false) {
-                        $error = 'Server-Fehler beim Hashing.';
+                    $p1 = isset($_POST['password']) ? (string)$_POST['password'] : '';
+                    $p2 = isset($_POST['password_confirm']) ? (string)$_POST['password_confirm'] : '';
+                    if ($p1 === '' || $p2 === '') {
+                        $error = 'Bitte beide Passwortfelder ausfüllen.';
+                    } elseif ($p1 !== $p2) {
+                        $error = 'Passwörter stimmen nicht überein.';
+                    } elseif (strlen($p1) < 6) {
+                        $error = 'Neues Passwort ist zu kurz (mindestens 6 Zeichen).';
                     } else {
-                        if (!atomicWrite($userPasswordFile, $hash)) {
-                            $error = 'Konnte Passwort nicht speichern.';
+                        $hash = password_hash($p1, PASSWORD_DEFAULT);
+                        if ($hash === false) {
+                            $error = 'Server-Fehler beim Hashing.';
                         } else {
-                            @chmod($userPasswordFile, 0640);
-                            // Token löschen
-                            @unlink($tokenFile);
-                            // Tokens des Users invalidieren (sessions)
-                            $tokenDir = $userDir . '/tokens';
-                            if (is_dir($tokenDir)) {
-                                $files = glob($tokenDir . '/*');
-                                if ($files !== false) foreach ($files as $f) if (is_file($f)) @unlink($f);
+                            if (!atomicWrite($userPasswordFile, $hash)) {
+                                $error = 'Konnte Passwort nicht speichern.';
+                            } else {
+                                @chmod($userPasswordFile, 0640);
+                                // Token löschen
+                                @unlink($tokenFile);
+                                // Tokens des Users invalidieren (sessions)
+                                $tokenDir = $userDir . '/tokens';
+                                if (is_dir($tokenDir)) {
+                                    $files = glob($tokenDir . '/*');
+                                    if ($files !== false) foreach ($files as $f) if (is_file($f)) @unlink($f);
+                                }
+                                $success = 'Passwort wurde zurückgesetzt. Bitte melde dich mit dem neuen Passwort an.';
                             }
-                            $success = 'Passwort wurde zurückgesetzt. Bitte melde dich mit dem neuen Passwort an.';
                         }
                     }
                 }
