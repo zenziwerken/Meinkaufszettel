@@ -153,6 +153,11 @@ $userTokenCleanupDays = 60;    // Alte Session-Tokens
 $invalidResetKeepDays = 30;    // Reset-Tokens
 $challengeMaxAgeDays = 365;    // Challenge-Dateien
 ```
+### Alte Dateien aufräumen
+Erstelle einen Cronjob für `data/cron.php`:
+```bash
+0	20	*	*	* cd /pfad/zu/Meinkaufszettel && php data/cron.php
+```
 
 ## 📖 Nutzung
 
