@@ -1,5 +1,4 @@
 # <img src="links/icon.svg" width="48" height="48"> Meinkaufszettel
-# Meinkaufszettel 🛒
 
 Eine schlanke, selbst-gehostete Web-App für gemeinsame Einkaufslisten und Notizen – entwickelt mit Fokus auf Privatsphäre, Einfachheit und Zusammenarbeit in Echtzeit.
 
