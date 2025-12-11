@@ -7,7 +7,7 @@ Eine schlanke, selbst-gehostete Web-App für gemeinsame Einkaufslisten und Notiz
 - **📱 Progressive Web App**: Funktioniert wie eine native App auf Smartphone, Tablet und Desktop
 - **🔄 Echtzeit-Synchronisation**: Mehrere Personen können gleichzeitig an einer Liste arbeiten
 - **🔐 Privatsphäre-first**: Selbst-gehostet, keine externe Cloud, volle Kontrolle über deine Daten
-- **🎨 Speiseplan-Modus**: Spezielle Funktion für Wochenpläne mit farblicher Kennzeichnung
+- **🍝 Speiseplan-Modus**: Spezielle Funktion für Wochenpläne mit farblicher Kennzeichnung
 - **📤 Listen teilen**: Einfaches Teilen via Link – ohne komplizierte Freigaben
 - **⚡ Ohne Datenbank**: Läuft mit reinen Dateien, minimal und wartungsarm
 
@@ -123,7 +123,7 @@ $resetTokenExpiry = 3600; // 1 Stunde
 1. Klicke auf das ⊕-Symbol in der Adressleiste
 2. Oder: Einstellungen → "App installieren"
 
-## 🎨 Speiseplan-Feature
+## 🍝 Speiseplan-Feature
 
 Listen mit dem Namen **"Speiseplan"** erhalten automatisch:
 - Farbcodierung nach Wochentagen (Mo–So)
