@@ -3,6 +3,15 @@
 require __DIR__ . '/bin/config.php';
 // Session prüfen, um zu erkennen ob der Besucher bereits angemeldet ist
 if (session_status() === PHP_SESSION_NONE) session_start();
+// CSRF-Token für synchronizer-token pattern erzeugen (falls noch nicht vorhanden)
+if (empty($_SESSION['csrf_token'])) {
+    try {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    } catch (Throwable $e) {
+        // Fallback, falls random_bytes nicht verfügbar
+        $_SESSION['csrf_token'] = bin2hex(openssl_random_pseudo_bytes(32));
+    }
+}
 $isAuthenticated = isset($_SESSION['auth_user']) && $_SESSION['auth_user'];
 
 // Wenn der Besucher angemeldet ist, nutze den Benutzernamen aus der Session.
@@ -28,7 +37,7 @@ if (isset($username) && $username && is_dir($userDir) && file_exists($settingsFi
     $raw = @file_get_contents($settingsFile);
     if ($raw !== false) {
         $decoded = json_decode($raw, true);
-        
+
         if (json_last_error() === JSON_ERROR_NONE && is_array($decoded) && isset($decoded['displayName']) && $decoded['displayName'] !== '') {
             $displayName = (string)$decoded['displayName'];
         }
@@ -63,6 +72,7 @@ $listNameOutput = htmlspecialchars(
 
 // --- Stylesheet-Versionierung ---
 $styleVersion  = file_exists(__DIR__ . '/links/style.css') ? date("Y-m-d_H-i-s", filemtime(__DIR__ . '/links/style.css')) : time();
+$styleVersion2 = file_exists(__DIR__ . '/links/pyro.css') ? date("Y-m-d_H-i-s", filemtime(__DIR__ . '/links/pyro.css')) : time();
 $scriptVersion = file_exists(__DIR__ . '/bin/frontend.js') ? date("Y-m-d_H-i-s", filemtime(__DIR__ . '/bin/frontend.js')) : time();
 
 // --- Dynamisches CSS für Speiseplan ---
@@ -117,13 +127,18 @@ if ($isAdmin) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="manifest" href="links/website.manifest" crossorigin="use-credentials">
     <link rel="stylesheet" href="links/style.css?<?= $styleVersion ?>">
+    <link rel="stylesheet" href="links/pyro.css?<?= $styleVersion2 ?>">
     <link rel="icon" type="image/svg+xml" href="links/icon.svg" />
     <link rel="icon" href="/favicon.ico" sizes="32x32">
     <link rel="apple-touch-icon" href="links/apple-touch-icon.png">
     <title>Meinkaufszettel</title>
     <?= $speiseplanCss ?>
     <style>
-        .help, .modal, #firstRunBanner { display: none; }
+        .help,
+        .modal,
+        #firstRunBanner {
+            display: none;
+        }
     </style>
 </head>
 
@@ -139,7 +154,7 @@ if ($isAdmin) {
                 <h1>Erster Start</h1>
                 <p class="hint">Willkommen beim <strong>Meinaufszettel</strong>. Wähle einen <strong>Benutzernamen</strong> und ein <strong>Passwort</strong> um das Benutzerkonto zu aktivieren. Die <strong>E-Mail</strong> wird ausschließlich verwendet, wenn du dein Passwort vergessen hast.</p>
                 <div>
-                        <form>
+                    <form>
                         <input type="text" id="inviteInput" placeholder="Invite-Token (falls nicht per Link)" value="<?= htmlspecialchars($inviteParam) ?>">
                         <input type="text" id="registerUsername" placeholder="Benutzername (a-zA-Z0-9_-)">
                         <input type="password" id="passCode" placeholder="Passwort">
@@ -158,7 +173,7 @@ if ($isAdmin) {
             <div id="login">
                 <span class="icon"></span>
                 <h1>Meinkaufszettel</h1>
-                    <div>
+                <div>
                     <form>
                         <input type="text" id="loginUsername" placeholder="Benutzername" autocomplete="username">
                         <input type="password" id="passCode" placeholder="Passwort" autocomplete="current-password">
@@ -171,7 +186,7 @@ if ($isAdmin) {
             <!-- Übersicht -->
             <div id="listOverview">
                 <span class="more" id="moreBtn" title="Mehr">⋯</span>
-                    <div id="moreMenu" class="more-menu" aria-hidden="true" role="navigation">
+                <div id="moreMenu" class="more-menu" aria-hidden="true" role="navigation">
                     <button id="menuShowHelp" class="menu-item help">Kurzanleitung</button>
                     <hr>
                     <button id="menuChangeUsername" class="menu-item username">Benutzername ändern</button>
@@ -187,7 +202,7 @@ if ($isAdmin) {
                 <h1 id="userNamesZettel"><?= $userHeadingText ?></h1>
                 <div class="input-row">
                     <input type="text" id="newListItem" placeholder="Ich gehe zu ...">
-                    <button id="addListItemBtn" class="btn" >Hinzufügen</button>
+                    <button id="addListItemBtn" class="btn">Hinzufügen</button>
                 </div>
                 <ul id="serverLists"></ul>
             </div>
@@ -205,6 +220,10 @@ if ($isAdmin) {
 
                 <ul id="itemList"></ul>
                 <ul id="inactiveList" <?= $cssSpeiseplan ?>></ul>
+                <div id="pyro" class="pyro">
+                    <div class="before"></div>
+                    <div class="after"></div>
+                </div>
             </div>
 
             <!-- Hilfetexte (Overlay/Modal) -->
@@ -223,6 +242,7 @@ if ($isAdmin) {
                         <li>Abgehakten Eintrag <strong>wieder aktivieren</strong>: Klicke auf den Eintrag, um ihn wieder zu aktivieren.</li>
                         <li><strong>Speiseplan</strong>: Ein Zettel mit den Namen 'Speiseplan' hat eine Sonderrolle. Einträge werden farblich und mit Wochentag markiert und der aktive Eintrag wird immer um 8 Uhr deaktiviert.</li>
                         <li><strong>Wichtige / Unwichtige Einträge</strong> kann man mit einem '!' oder einem '?' am Ende versehen.</li>
+                        <p>Weitere Information und die aktuelle Version bei <a href="https://zenziwerken.github.io/Meinkaufszettel/">GitHub<span class="gitHubIcon"></span></a></p>
                     </ul>
                 </div>
             </div>
@@ -340,6 +360,7 @@ if ($isAdmin) {
     </div>
     <script>
         const speiseplanName = <?= json_encode($speiseplanName) ?>;
+        const csrfToken = <?= json_encode($_SESSION['csrf_token'] ?? '') ?>;
         const syncInterval = <?= $syncInterval ?>;
         const inactivityTimeoutMs = <?= $inactivityTimeoutMs ?>;
         const username = <?= json_encode($username) ?>;

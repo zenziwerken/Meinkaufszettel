@@ -43,37 +43,11 @@ function validatePath(string $base, string $rel): bool {
 }
 
 /**
- * Wandelt einen Unix-Timestamp in eine verständliche Zeitangabe um.
- * @param int $timestamp Der Unix-Timestamp.
- * @return string Die verständliche Zeitangabe (HTML-escaped).
- */
-function verstaendlicheZeitangabe($timestamp) {
-    $jetzt = time();
-    $diff = $jetzt - $timestamp;
-    
-    // In Minuten umrechnen
-    $minuten = floor($diff / 60);
-    $stunden = floor($diff / 3600);
-    $tage = floor($diff / 86400);
-    
-    if ($minuten < 5) {
-        return "gerade&nbsp;eben&nbsp;geändert";
-    } elseif ($minuten < 15) {
-        return "vor&nbsp;kurzem&nbsp;geändert";
-    } elseif ($minuten < 60) {
-        return "in&nbsp;der letzten Stunde geändert";
-    } elseif ($stunden < 24) {
-        return "vor&nbsp;" . $stunden . "&nbsp;Stunde" . ($stunden != 1 ? "n" : "") . "&nbsp;geändert";
-    } elseif ($stunden < 48)  {
-        return "gestern&nbsp;geändert";
-    } else {
-        return "vor&nbsp;" . $tage . "&nbsp;Tag" . ($tage != 1 ? "en" : "") . "&nbsp;geändert";
-    }
-}
-
-/**
- * Atomisch eine Datei ersetzen (tmp -> rename).
- * Vereinfachte Variante ohne spezielle Symlink-Behandlung (Hardlinks erwartet).
+ * Atomisch eine Datei ersetzen.
+ * * Strategie:
+ * 1. Symlinks: Ziel auflösen.
+ * 2. Hardlinks (Geteilte Listen): In-Place Update mit Stream-Copy (minimiert Risiko bei Absturz).
+ * 3. Normale Dateien: Atomic Rename (tmp -> rename).
  */
 function atomicReplaceFile(string $path, string $content): bool {
     // Wenn $path ein Symlink ist, arbeite auf dem Ziel der Symlink
@@ -91,30 +65,69 @@ function atomicReplaceFile(string $path, string $content): bool {
     $targetDir = dirname($target);
     if (!is_dir($targetDir) && !@mkdir($targetDir, 0750, true)) return false;
 
-    // Wenn die Datei bereits existiert und mehrere Hardlinks hat, schreibe IN-PLACE
-    // damit andere Hardlinks den neuen Inhalt sehen.
+    // Wenn die Datei bereits existiert, prüfen wir auf Hardlinks
+													 
     if (file_exists($target)) {
         $st = @stat($target);
         $nlink = 1;
         if ($st !== false) {
             $nlink = isset($st['nlink']) ? (int)$st['nlink'] : (isset($st[3]) ? (int)$st[3] : 1);
         }
+
+        // SONDERFALL: Geteilte Liste (Hardlink)
+        // Wir dürfen die Datei nicht löschen/renamen, sonst bricht der Link für andere User.
+        // Wir müssen den Inhalt der *bestehenden* Inode überschreiben.
         if ($nlink > 1) {
-            $fp = @fopen($target, 'c+');
-            if ($fp === false) return false;
-            if (!flock($fp, LOCK_EX)) { fclose($fp); return false; }
-            if (!ftruncate($fp, 0)) { flock($fp, LOCK_UN); fclose($fp); return false; }
+            // Schritt A: Inhalt erst in eine temporäre Check-Datei schreiben.
+            // Das stellt sicher, dass wir Quota haben und das FS okay ist.
+            $tmpCheck = $targetDir . '/.' . basename($target) . '.check-' . bin2hex(random_bytes(4));
+            if (file_put_contents($tmpCheck, $content) === false) {
+                return false;
+            }
+
+            // Schritt B: Ziel öffnen und sperren
+            $fp = @fopen($target, 'r+'); // r+ erwartet existierende Datei
+            if ($fp === false) {
+                @unlink($tmpCheck);
+                return false;
+            }
+
+            if (!flock($fp, LOCK_EX)) {
+                fclose($fp);
+                @unlink($tmpCheck);
+                return false;
+            }
+
+            // Schritt C: Datei leeren (Risiko-Moment beginnt hier)
+            if (!ftruncate($fp, 0)) {
+                flock($fp, LOCK_UN);
+                fclose($fp);
+                @unlink($tmpCheck);
+                return false;
+            }
             rewind($fp);
-            $written = fwrite($fp, $content);
+
+            // Schritt D: Stream-Copy von Temp nach Ziel (schneller als String-Write)
+            $src = fopen($tmpCheck, 'r');
+            if ($src) {
+                stream_copy_to_stream($src, $fp);
+                fclose($src);
+            }
+
+            // Schritt E: Aufräumen (Risiko-Moment endet hier)
             fflush($fp);
             flock($fp, LOCK_UN);
             fclose($fp);
+            
             @chmod($target, 0640);
-            return $written !== false;
+            @unlink($tmpCheck);
+
+            return true;
         }
     }
 
-    // Standard: atomischer Austausch via tmp -> rename
+    // STANDARD: atomischer Austausch via tmp -> rename
+    // Das ist die sicherste Methode für normale Dateien (nicht geteilt).
     $tmp = $targetDir . '/.' . basename($target) . '.tmp-' . bin2hex(random_bytes(6));
     $written = @file_put_contents($tmp, $content, LOCK_EX);
     if ($written === false) {
@@ -132,6 +145,7 @@ function atomicReplaceFile(string $path, string $content): bool {
 
 /**
  * Atomisch eine Datei schreiben (tmp -> rename).
+ * (Genutzt z.B. für Reset-Tokens oder neue Listen).
  */
 function atomicWrite(string $path, string $content): bool {
     $dir = dirname($path);
@@ -143,41 +157,34 @@ function atomicWrite(string $path, string $content): bool {
     return true;
 }
 
-/** 
-* Bereinigen Sie einen vom Benutzer bereitgestellten Anzeigenamen und lassen Sie gleichzeitig Emojis zu. 
-* Schritte: 
-* – Leerzeichen entfernen 
-* – Entfernen Sie ASCII-Steuerzeichen (0x00-0x1F, 0x7F), um Injektions-/Formatierungsprobleme zu vermeiden 
-* – Wenn möglich auf NFC normalisieren 
-* – Reduzieren Sie wiederholte Leerzeichen in einzelne Leerzeichen und entfernen Sie CR/LF 
-* – Erzwingen Sie eine maximale Länge in Zeichen (UTF-8-fähig) 
-* Gibt die bereinigte Zeichenfolge zurück (kann leer sein, wenn die Eingabe nur ungültige Zeichen umfasst). 
+	
+/** * Bereinigen Sie einen vom Benutzer bereitgestellten Anzeigenamen und lassen Sie gleichzeitig Emojis zu.																  
 */
 function sanitizeDisplayName(string $input): string {
-    // Trim
+		   
     $s = trim($input);
     if ($s === '') return '';
 
-    // Remove ASCII control chars (keep Unicode formatting like ZWJ for emojis)
+    // ASCII Steuerzeichen entfernen
     $s = preg_replace('/[\x00-\x1F\x7F]+/u', '', $s);
     if ($s === null) $s = '';
 
-    // Remove CR/LF and replace with space
+    // CR/LF entfernen
     $s = str_replace(["\r", "\n"], ' ', $s);
 
-    // Collapse multiple whitespace into single space
+    // Doppelte Leerzeichen reduzieren
     $s = preg_replace('/\s+/u', ' ', $s);
     if ($s === null) $s = '';
 
-    // Unicode normalize to NFC if ext available
+    // NFC Normalisierung
     if (class_exists('Normalizer') && defined('Normalizer::FORM_C')) {
         $s = Normalizer::normalize($s, Normalizer::FORM_C) ?: $s;
     }
 
-    // Trim again after replacements
+									
     $s = trim($s);
 
-    // Max length (characters, UTF-8 aware). Use grapheme if available.
+    // Maximallänge (Zeichen)
     $max = 512;
     if (function_exists('grapheme_strlen')) {
         if (grapheme_strlen($s) > $max) {
@@ -243,7 +250,7 @@ function shareList(string $username, string $filename): string {
  * @param string $identifier Eine eindeutige Kennung (z.B. IP-Adresse oder Session-ID).
  * @param int $maxAttempts Maximale Anzahl Versuche im Zeitfenster.
  * @param int $timeWindow Zeitfenster in Sekunden.
- * @return bool True, wenn die Aktion erlaubt ist, sonst false.
+ * @return bool True, wenn die Aktion erlaubt ist, sonst false.															   
  */
 function checkRateLimit(string $action, string $identifier, int $maxAttempts = 5, int $timeWindow = 300): bool {
     global $rateLimitDir;
@@ -280,7 +287,7 @@ function resetRateLimit(string $action, string $identifier): bool {
 
     if (!is_dir($rateLimitDir)) return true;
 
-    // Verwende die gleiche Dateinamenslogik wie in checkRateLimit (kompatibel bleiben)
+																					   
     $hash = hash('sha256', $action . $identifier);
     $file = $rateLimitDir . '/' . $hash;
 

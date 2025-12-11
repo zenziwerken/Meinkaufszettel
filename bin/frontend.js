@@ -45,6 +45,9 @@ function showStatus(message, type) {
 
     // Verhalten: Fehler (`error`) bleiben stehen; Änderungen (`change`) verschwinden nach 10s
     if (type === 'change') {
+      statusDiv._dismissTimer = setTimeout(clear, 5000);
+    }
+    if (type === 'error') {
       statusDiv._dismissTimer = setTimeout(clear, 10000);
     }
   } catch (e) {
@@ -103,20 +106,72 @@ function setupEnterKeyListener(elementId, callback) {
   }
 }
 
+/**
+ * Ersetzt reguläre Leerzeichen durch geschützte Leerzeichen (U+00A0),
+ */
+function withNbsp(text) {
+  try {
+    return String(text).replace(/ /g, '\u00A0');
+  } catch (e) {
+    return String(text);
+  }
+}
+
+function formatTimeAgo(timestamp) {
+    const seconds = Math.floor((Date.now() / 1000) - timestamp);
+
+    // weniger als 5 Minuten
+    if (seconds < 300) return withNbsp('gerade eben geändert');
+    // 5 bis 15 Minuten
+    if (seconds < 900) return withNbsp('vor kurzem geändert');
+    // weniger als 1 Stunde
+    if (seconds < 3600) return withNbsp('in der letzten Stunde geändert');
+
+    const rtf = new Intl.RelativeTimeFormat('de', { numeric: 'auto' });
+
+    const hours = Math.floor(seconds / 3600);
+    if (hours < 24) return withNbsp(rtf.format(-hours, 'hour') + ' geändert');
+
+    const days = Math.floor(seconds / 86400);
+    return withNbsp(rtf.format(-days, 'day') + ' geändert');
+}
+
+/**
+ * Zentraler POST-Helper für JSON-Requests an `bin/backend.php`.
+ * Fügt standardmäßig `credentials: 'same-origin'` und das CSRF-Token
+ * als Header `X-CSRF-Token` hinzu (falls `csrfToken` verfügbar ist).
+ * Rückgabe: das Promise von `fetch` (Roh-Response) — Aufrufer kann `.json()` weiter nutzen.
+ */
+function postToBackend(payload, extraOptions) {
+  const headers = Object.assign({}, (extraOptions && extraOptions.headers) || {});
+  if (!headers['Content-Type'] && !headers['content-type']) headers['Content-Type'] = 'application/json';
+  try {
+    if (typeof csrfToken !== 'undefined' && csrfToken) {
+      headers['X-CSRF-Token'] = csrfToken;
+    }
+  } catch (e) {}
+
+  const opts = Object.assign({
+    method: 'POST',
+    credentials: 'same-origin',
+    headers,
+    body: JSON.stringify(payload)
+  }, extraOptions || {});
+
+  return fetch('bin/backend.php', opts);
+}
+
 // ==========================================================
 //  Server-Interaktionen (save/load/list)
- // ==========================================================
+// ==========================================================
+
 function saveListToServer(filename, activeItems, inactiveItems, onSuccess, onError) {
-  fetch("bin/backend.php", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      action: "save",
-      filename,
-      active: activeItems,
-      inactive: inactiveItems,
-        username: typeof username !== 'undefined' ? username : undefined,
-    }),
+  postToBackend({
+    action: "save",
+    filename,
+    active: activeItems,
+    inactive: inactiveItems,
+    username: typeof username !== 'undefined' ? username : undefined,
   })
     .then((response) => response.json())
     .then((data) => {
@@ -127,11 +182,7 @@ function saveListToServer(filename, activeItems, inactiveItems, onSuccess, onErr
 }
 
 function fetchAllLists(onSuccess, onError) {
-  fetch("bin/backend.php", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "list", username: typeof username !== 'undefined' ? username : undefined }),
-  })
+  postToBackend({ action: "list", username: typeof username !== 'undefined' ? username : undefined })
     .then(async (response) => {
       let data = null;
       try {
@@ -164,11 +215,7 @@ function loadList() {
     return;
   }
 
-  fetch("bin/backend.php", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "load", id: filename, username: typeof username !== 'undefined' ? username : undefined }),
-  })
+  postToBackend({ action: "load", id: filename, username: typeof username !== 'undefined' ? username : undefined })
     .then(async (response) => {
       let data = null;
       try {
@@ -246,12 +293,7 @@ function shareListRequest(filename, listMeta) {
     filename,
     username: typeof username !== "undefined" ? username : undefined,
   };
-
-  fetch("bin/backend.php", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  })
+  postToBackend(payload)
     .then(async (response) => {
       let data = null;
       try {
@@ -317,11 +359,7 @@ function acceptSharedToken(token) {
 
   showStatus('Versuche, geteilte Liste zu übernehmen...', 'change');
 
-  fetch('bin/backend.php', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'shared', share: token, username: typeof username !== 'undefined' ? username : undefined }),
-  })
+  postToBackend({ action: 'shared', share: token, username: typeof username !== 'undefined' ? username : undefined })
     .then(async (response) => {
       let data = null;
       try {
@@ -473,11 +511,7 @@ function syncNow(filename) {
     li.querySelector(".itemText").textContent.trim()
   );
 
-  fetch("bin/backend.php", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "sync", filename, active: activeItems, inactive: inactiveItems, username: typeof username !== 'undefined' ? username : undefined }),
-  })
+  postToBackend({ action: "sync", filename, active: activeItems, inactive: inactiveItems, username: typeof username !== 'undefined' ? username : undefined })
     .then(async (response) => {
       let data = null;
       try {
@@ -623,18 +657,14 @@ function register() {
 
   const regUsername = document.getElementById('registerUsername')?.value?.trim();
   const regEmail = document.getElementById('registerEmail')?.value?.trim();
-  fetch("bin/backend.php", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      action: "register",
-      password: passCode,
-      username: regUsername || undefined,
-      email: regEmail || undefined,
-      invite: (typeof inviteToken !== 'undefined' && inviteToken)
-        ? inviteToken
-        : (document.getElementById('inviteInput')?.value?.trim() || undefined),
-    }),
+  postToBackend({
+    action: "register",
+    password: passCode,
+    username: regUsername || undefined,
+    email: regEmail || undefined,
+    invite: (typeof inviteToken !== 'undefined' && inviteToken)
+      ? inviteToken
+      : (document.getElementById('inviteInput')?.value?.trim() || undefined),
   })
     .then(async (response) => {
       let data = null;
@@ -675,11 +705,7 @@ function login() {
   const inputUsername = document.getElementById('loginUsername')?.value?.trim();
   const payloadUsername = inputUsername && inputUsername.length ? inputUsername : (typeof username !== 'undefined' ? username : undefined);
 
-  fetch("bin/backend.php", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "login", password: passCode, username: payloadUsername }),
-  })
+  postToBackend({ action: "login", password: passCode, username: payloadUsername })
     .then((response) =>
       response.json().then((data) => {
         if (!response.ok) throw { status: response.status, message: data.error || "Unbekannter Serverfehler" };
@@ -1110,6 +1136,20 @@ function moveToInactive(li) {
         if (li.parentElement) li.parentElement.removeChild(li);
         const finalLi = createInactiveItem(stripped);
         document.getElementById("inactiveList")?.appendChild(finalLi);
+        // Wenn keine aktiven Elemente mehr vorhanden sind, zeige das "Pyro"-Element
+        try {
+          const itemList = document.getElementById('itemList');
+          const activeCount = itemList ? itemList.querySelectorAll('li').length : 0;
+          if (activeCount === 0) {
+            const pyro = document.getElementById('pyro');
+            if (pyro) {
+              pyro.classList.add('visible');
+              void pyro.offsetWidth;
+              setTimeout(() => { pyro.classList.remove('visible');}, 10000);
+            }
+          }
+        } catch (e) {}
+
         sortInactiveList();
         updateActiveOrder();
       },
@@ -1456,10 +1496,9 @@ function showServerLists(lists) {
 
     const spanModified = document.createElement('span');
     spanModified.className = 'modified';
-    // Sicherstellen, dass vom Server HTML-kodierte geschützte Leerzeichen
-    // in echte NBSP-Zeichen konvertiert werden, damit die Anzeige korrekt ist
-    const lastModifiedRaw = String(list.lastModified || '');
-    const lastModified = lastModifiedRaw.replace(/&nbsp;/g, '\u00A0');
+  
+    const lastModified = String(formatTimeAgo(list.lastModified )|| '');
+    
     const modText = ' (' + (entryText ? (entryText + ', ' + lastModified) : lastModified) + ')';
     spanModified.textContent = modText;
     spanItemText.appendChild(spanModified);
@@ -1510,11 +1549,7 @@ function showServerLists(lists) {
     li.querySelector(".deleteBtn").addEventListener("click", function (e) {
       e.stopPropagation();
       if (!confirm("Möchten Sie die Liste wirklich löschen?")) return;
-      fetch("bin/backend.php", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "delete", filename: list.filename.replace(".json", ""), username: typeof username !== 'undefined' ? username : undefined }),
-      })
+      postToBackend({ action: "delete", filename: list.filename.replace(".json", ""), username: typeof username !== 'undefined' ? username : undefined })
         .then((response) => response.json())
         .then((data) => {
           if (data.success) {
@@ -1589,15 +1624,11 @@ function editListItem(button) {
     const newText = input.value.trim();
     if (newText && newText !== oldText) {
       const newFilename = replaceSpacesWithUnderscores(newText);
-      fetch("bin/backend.php", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "rename",
-          oldFilename: replaceSpacesWithUnderscores(oldText),
-          newFilename: newFilename,
-          username: typeof username !== 'undefined' ? username : undefined,
-        }),
+      postToBackend({
+        action: "rename",
+        oldFilename: replaceSpacesWithUnderscores(oldText),
+        newFilename: newFilename,
+        username: typeof username !== 'undefined' ? username : undefined,
       })
         .then((response) => response.json())
         .then((data) => {
@@ -1696,11 +1727,7 @@ function addListItem() {
   const text = replaceSpacesWithUnderscores(input?.value.trim() || "");
   if (!text) return;
 
-  fetch("bin/backend.php", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "create", filename: text, username: typeof username !== 'undefined' ? username : undefined }),
-  })
+  postToBackend({ action: "create", filename: text, username: typeof username !== 'undefined' ? username : undefined })
     .then((response) => response.json())
     .then((data) => {
       if (data.success) {
@@ -1779,12 +1806,7 @@ document.addEventListener("DOMContentLoaded", function () {
   async function doLogout() {
     try { stopInactivityTimer(); } catch (e) {}
     try {
-      await fetch("bin/backend.php", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "logout" }),
-        credentials: "same-origin",
-      });
+      await postToBackend({ action: "logout" });
     } catch (e) {
       console.warn("Logout-Request fehlgeschlagen:", e);
     }

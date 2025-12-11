@@ -14,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!checkRateLimit('reset_request_ip', $ip, $maxRequests, $timeWindow)) {
         header('Retry-After: ' . $timeWindow);
         // generische Meldung beibehalten (vermeidet User-Enumeration)
-        $message = 'Wenn ein Konto existiert, wurde eine E-Mail mit einem Link versandt.';
+        $message = 'Wenn ein Konto existiert, schicken wir eine E-Mail mit einem Link.';
     } else {
         if (!preg_match($usernameMatch, $username)) {
             // generische Meldung (vermeidet User-Enumeration)

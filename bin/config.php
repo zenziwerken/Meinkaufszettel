@@ -1,9 +1,12 @@
 <?php
 // Erlaubtes Muster für Listennamen (Dateinamen innerhalb eines Benutzer-Verzeichnisses)
-$filenameMatch = '/^[a-zA-ZäöüÄÖÜß0-9_-~]+$/'; 
+$filenameMatch = '/^[a-zA-ZäöüÄÖÜß0-9_-~]{2,}+$/'; 
 
 // Erlaubtes Muster für Benutzernamen (Verzeichnisnamen unter data)
-$usernameMatch = '/^[a-zA-Z0-9_-]+$/';
+$usernameMatch = '/^[a-zA-Z0-9_-]{3,}+$/';
+
+// Maximale Anzahl an Listen
+$maxList = 200;
 
 // Maximale Anzahl Einträge pro Liste
 $maxItemsPerList = 200;

@@ -74,6 +74,40 @@ if ($reqUsername !== null) {
 // --- Sicherstellen, dass Basisdaten- und Invite-Verzeichnisse existieren (sichere Berechtigungen) ---
 ensureRequiredDirectories();
 
+// --- CSRF-Prüfung für authentifizierte schreibende Anfragen ---
+// Wir prüfen nur, wenn die Anfrage voraussichtlich authentifiziert ist (Session oder gültiges Cookie-Token),
+// und die Aktion nicht in der expliziten Allowlist für öffentliche Endpunkte ist.
+$publicActions = ['firstRun', 'list', 'load', 'login', 'register', 'download', 'shared'];
+try {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $willBeAuthenticated = false;
+        if (!empty($_SESSION['auth_user'])) {
+            $willBeAuthenticated = true;
+        } else {
+            $ckUser = isset($_COOKIE['username']) ? trim((string)$_COOKIE['username']) : null;
+            $ckToken = isset($_COOKIE['token']) ? $_COOKIE['token'] : null;
+            if ($ckUser && $ckToken && preg_match($usernameMatch, $ckUser)) {
+                $ckHash = hash('sha256', $ckToken);
+                $possibleTokenFile = $usersDir . '/' . $ckUser . '/tokens/' . $ckHash;
+                if (file_exists($possibleTokenFile)) $willBeAuthenticated = true;
+            }
+        }
+
+        if ($willBeAuthenticated && !in_array($action, $publicActions, true)) {
+            // Token aus Header (X-CSRF-Token) oder JSON-Payload akzeptieren
+            $headerToken = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+            if (!$headerToken && isset($data['csrf_token'])) $headerToken = $data['csrf_token'];
+
+            if (empty($headerToken) || empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $headerToken)) {
+                sendError('Ungültiges CSRF-Token.', 403);
+            }
+        }
+    }
+} catch (Throwable $e) {
+    // Bei Fehlern in der CSRF-Logik nicht den Server komplett kappen, sondern sichere Fehlermeldung
+    sendError('CSRF-Prüfung fehlgeschlagen.', 403);
+}
+
 if ($action === 'register') {
     // Registrierung nur mit gültigem Invite-Token
     $inviteToken = isset($data['invite']) ? trim((string)$data['invite']) : '';
@@ -150,7 +184,10 @@ if ($action === 'firstRun') {
         if (is_array($uEntries)) {
             foreach ($uEntries as $ue) {
                 if ($ue === '.' || $ue === '..') continue;
-                if (is_dir($usersDir . '/' . $ue)) { $hasAnyUser = true; break; }
+                if (is_dir($usersDir . '/' . $ue) && file_exists($usersDir . '/' . $ue . '/.password')) { 
+                    $hasAnyUser = true; 
+                    break; 
+                }
             }
         }
 
@@ -678,7 +715,7 @@ if ($action === 'list') {
         $list[] = [
             'filename' => $filename,
             'itemCount' => $itemCount,
-            'lastModified' => verstaendlicheZeitangabe(filemtime($file)),
+            'lastModified' => filemtime($file),
             'shared' => $isShared
         ];
         
@@ -904,6 +941,11 @@ if ($action === 'download') {
         $userDirReal = realpath($userDir) ?: $userDir;
         $userDirNorm = str_replace('\\', '/', rtrim($userDirReal, '/\\'));
         $baseLen = strlen($userDirNorm);
+
+        // Begrenzung: maximal $maxList Dateien in das ZIP packen (Konfig-Variable $maxList)
+        $maxListLocal = isset($maxList) ? (int)$maxList : 200;
+        if ($maxListLocal < 1) $maxListLocal = 200;
+        $addedCount = 0;
         foreach ($it as $file) {
             /** @var SplFileInfo $file */
             $real = $file->getRealPath();
@@ -922,11 +964,18 @@ if ($action === 'download') {
             // Aus Sicherheitsgründen bestimmte Dateien/Verzeichnisse ausschließen
             // z.B. Passwort-, Settings- und Token-Dateien
             if ($relative === '.password') continue;
+            if ($relative === '.settings') continue;
             if (strpos($relative, 'tokens/') === 0 || strpos($relative, 'tokens\\') === 0) continue;
             // Vermeide, dass Zip-Einträge mit reinem Pfadseparator oder ähnlichem entstehen
             $relative = ltrim($relative, '/\\');
             if ($relative === '') continue;
+            // Prüfe, ob Limit bereits erreicht wurde
+            if ($addedCount >= $maxListLocal) {
+                // Limit erreicht — weitere Dateien werden übersprungen
+                continue;
+            }
             $zip->addFile($real, $relative);
+            $addedCount++;
         }
 
         $zip->close();
