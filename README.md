@@ -127,7 +127,7 @@ $resetTokenExpiry = 3600; // 1 Stunde
 
 Listen mit dem Namen **"Speiseplan"** erhalten automatisch:
 - Farbcodierung nach Wochentagen (Mo–So)
-- Automatisches Wechseln zum nächsten Tag um 20 Uhr
+- Automatisches Wechseln zum nächsten Tag um 20 Uhr (nur bei Verwendung von cron.php)
 - Spezielle Darstellung für Essensplanung
 
 Anpassbar in `bin/config.php`:
