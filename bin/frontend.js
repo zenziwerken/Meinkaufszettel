@@ -1497,6 +1497,7 @@ function showServerLists(lists) {
     const spanModified = document.createElement('span');
     spanModified.className = 'modified';
   
+    //const lastModified = String(list.lastModified || '');
     const lastModified = String(formatTimeAgo(list.lastModified )|| '');
     
     const modText = ' (' + (entryText ? (entryText + ', ' + lastModified) : lastModified) + ')';
@@ -1548,20 +1549,8 @@ function showServerLists(lists) {
     // Schaltfläche zum Löschen
     li.querySelector(".deleteBtn").addEventListener("click", function (e) {
       e.stopPropagation();
-      if (!confirm("Möchten Sie die Liste wirklich löschen?")) return;
-      postToBackend({ action: "delete", filename: list.filename.replace(".json", ""), username: typeof username !== 'undefined' ? username : undefined })
-        .then((response) => response.json())
-        .then((data) => {
-          if (data.success) {
-            li.parentElement?.removeChild(li);
-            fetchAllLists(showServerLists, function (error) {
-              showStatus("Fehler beim Laden der Listen: " + (error || data.error), "error");
-            });
-          } else {
-            showStatus("Fehler beim Löschen: " + (data.error || "Unbekannter Fehler"), "error");
-          }
-        })
-        .catch((error) => showStatus("Fehler: " + error, "error"));
+      // Öffne das Bestätigungs-Modal (die eigentliche Löschung wird dort ausgeführt)
+      openDeleteListModal(list.filename);
     });
 
     if (typeof speiseplanName !== "undefined" && entryFilename == speiseplanName) {
@@ -1570,6 +1559,189 @@ function showServerLists(lists) {
 
     ul.appendChild(li);
   });
+}
+
+  // Öffnet das Bestätigungs-Modal zum Löschen einer Liste
+  function openDeleteListModal(filename) {
+    const modal = document.getElementById("deleteListModal");
+    const filenameNoExt = String(filename || '').replace(/\.json$/i, '');
+    if (!modal) {
+      // Fallback: falls Modal nicht vorhanden, zuerst mit confirm bestätigen
+      const displayNameFallback = replaceUnderscoresWithSpaces(filenameNoExt);
+      if (!confirm('Möchten Sie die Liste "' + displayNameFallback + '" wirklich löschen?')) return;
+      postToBackend({ action: "delete", filename: filenameNoExt, username: typeof username !== 'undefined' ? username : undefined })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.success) {
+            fetchAllLists(showServerLists, function (error) {
+              if (error) showStatus("Fehler beim Laden der Listen: " + (error || data.error), "error");
+            });
+          } else {
+            showStatus("Fehler beim Löschen: " + (data.error || "Unbekannter Fehler"), "error");
+          }
+        })
+        .catch((error) => showStatus("Fehler: " + error, "error"));
+      return;
+    }
+
+    const displayName = replaceUnderscoresWithSpaces(filenameNoExt);
+    const nameEl = document.getElementById("deleteListModalName");
+    if (nameEl) nameEl.textContent = displayName;
+    modal.dataset.filename = filenameNoExt;
+
+    // Öffne Modal (verwende vorhandene Hilfsfunktion für Fokus)
+    try { 
+      if (typeof _openModal === 'function') {
+        _openModal("deleteListModal", "#confirmDeleteListBtn");
+      } else {
+        throw new Error('no _openModal');
+      }
+    } catch (e) { 
+      // Falls _openModal nicht verfügbar, zeige das Modal per Inline-Style
+      modal.style.display = 'flex';
+      modal.setAttribute('aria-hidden', 'false');
+      const confirm = document.getElementById('confirmDeleteListBtn');
+      if (confirm) try { confirm.focus(); } catch (e) {}
+    }
+  }
+
+  // Modal-Buttons: Abbrechen und Bestätigen
+  (function () {
+    const modalId = 'deleteListModal';
+    const cancelBtn = document.getElementById("cancelDeleteListBtn");
+    const closeBtn = document.getElementById("closeDeleteList");
+
+    function closeDeleteModalFallback() {
+      const modal = document.getElementById(modalId);
+      if (!modal) return;
+      modal.style.display = 'none';
+      modal.setAttribute('aria-hidden', 'true');
+      modal.setAttribute('aria-modal', 'false');
+      try { delete modal.dataset.filename; } catch (e) {}
+      try {
+        if (modal._keydownHandler) {
+          document.removeEventListener('keydown', modal._keydownHandler);
+          delete modal._keydownHandler;
+        }
+      } catch (e) {}
+      try { modal._previousActive && modal._previousActive.focus && modal._previousActive.focus(); } catch (e) {}
+    }
+
+    if (cancelBtn) {
+      cancelBtn.addEventListener("click", function () {
+        if (typeof _closeModal === 'function') _closeModal(modalId);
+        else if (closeBtn) closeBtn.click();
+        else closeDeleteModalFallback();
+      });
+    }
+
+    if (closeBtn) {
+      closeBtn.addEventListener('click', function () {
+        if (typeof _closeModal === 'function') _closeModal(modalId);
+        else closeDeleteModalFallback();
+      });
+    }
+
+    const confirmBtn = document.getElementById("confirmDeleteListBtn");
+    if (confirmBtn) {
+      confirmBtn.addEventListener("click", function () {
+        const modal = document.getElementById(modalId);
+        if (!modal) return;
+        const fname = modal.dataset.filename;
+        if (!fname) return;
+        const btn = this;
+        btn.disabled = true;
+        postToBackend({ action: "delete", filename: fname, username: typeof username !== 'undefined' ? username : undefined })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.success) {
+              if (typeof _closeModal === 'function') _closeModal(modalId);
+              else closeDeleteModalFallback();
+              fetchAllLists(showServerLists, function (error) {
+                if (error) showStatus("Fehler beim Laden der Listen: " + (error || data.error), "error");
+              });
+            } else {
+              showStatus("Fehler beim Löschen: " + (data.error || "Unbekannter Fehler"), "error");
+            }
+          })
+          .catch((error) => showStatus("Fehler: " + error, "error"))
+          .finally(() => { btn.disabled = false; });
+      });
+    }
+  })();
+
+// --- Speiseplan-Verlauf: öffnen, schließen und laden ---
+function fetchSpeiseplanHistory() {
+  const container = document.getElementById('itemListSpeiseplan');
+  if (!container) {
+    showStatus('Speiseplan-Container nicht gefunden.', 'error');
+    return;
+  }
+  postToBackend({ action: 'speiseplan_history' })
+    .then(r => r.json ? r.json() : r)
+    .then((res) => {
+      if (!res || !res.success) {
+        showStatus('Fehler beim Laden des Speiseplanverlaufs.', 'error');
+        return;
+      }
+      const items = res.history || [];
+      if (items.length === 0) {
+        showStatus('Keine Einträge im Speiseplanverlaufs gefunden.', 'change');
+        return;
+      }
+      const itemListSpeiseplan = document.getElementById("itemListSpeiseplan");
+
+      // Leere vorhandene Inhalte und füge für jeden Eintrag ein <li> hinzu
+      try { itemListSpeiseplan.innerHTML = ''; } catch (e) {}
+      for (const it of items) {
+        const w = it.weekday || '';
+        const d = it.date || '';
+        const t = it.text || '';
+        const li = document.createElement('li');
+        const span = document.createElement('span');
+        const strong = document.createElement('strong');
+        span.textContent = d;
+        strong.textContent = w;
+        if (w === 'Sa.' || w === 'So.') {
+          li.classList.add('weekend');
+        }
+        li.appendChild(strong);
+        li.appendChild(span);
+        li.appendChild(document.createTextNode(' ' + t));
+        itemListSpeiseplan.appendChild(li);
+      }
+
+      // Benutze vorhandenen Zurück-Button aus index.php
+      const backBtn = document.getElementById('speiseplanbackBtn');
+      if (backBtn && !backBtn._speiseplanBound) {
+        backBtn.addEventListener('click', () => closeSpeiseplanHistory());
+        backBtn._speiseplanBound = true;
+      }
+
+    })
+    .catch((err) => { showStatus('Fehler beim Laden des Speiseplanverlaufs.', 'error'); console.error(err); });
+}
+
+function openSpeiseplanHistory() {
+  const container = document.getElementById('listSpeiseplanHistory');
+  if (!container) return;
+  try { if (typeof closeMoreMenu === 'function') closeMoreMenu(); } catch (e) {}
+  try {
+    const lo = document.getElementById('listOverview');
+    if (lo && lo.style && lo.style.setProperty) lo.style.setProperty('display', 'none', 'important');
+  } catch (e) {}
+  try { const le = document.getElementById('listElements'); if (le && le.style) le.style.display = 'none'; } catch (e) {}
+  try { const lg = document.getElementById('login'); if (lg && lg.style) lg.style.display = 'none'; } catch (e) {}
+
+  try { container.style.display = ''; } catch (e) {}
+  fetchSpeiseplanHistory();
+}
+
+function closeSpeiseplanHistory() {
+  const container = document.getElementById('listSpeiseplanHistory');
+  if (!container) return;
+  container.style.display = 'none';
+  try { const lo = document.getElementById('listOverview'); if (lo && lo.style && lo.style.removeProperty) lo.style.removeProperty('display'); } catch (e) {}
 }
 
 function editListItem(button) {
@@ -1586,10 +1758,21 @@ function editListItem(button) {
   input.className = "editInput";
   input.style.flex = "1";
 
-  button.disabled = true;
+  // Set editing state and allow the button to act as a "save/check" while editing
+  button.classList.add('editing');
+  button.disabled = false;
   li.insertBefore(input, spanitemText);
   spanitemText.style.display = "none";
   input.focus();
+
+  // Während der Bearbeitung: Klick auf die gleiche Schaltfläche speichert (wie bei editItem)
+  function _buttonSaveHandler(e) {
+    e.stopPropagation();
+    if (!li.dataset.editing) return;
+    try { finishEdit(); } catch (err) { console.error(err); }
+  }
+  button._saveHandler = _buttonSaveHandler;
+  button.addEventListener('click', button._saveHandler);
 
   const tempHandler = function (e) {
     if (!li.dataset.editing) return;
@@ -1659,10 +1842,39 @@ function editListItem(button) {
   function cleanup() {
     delete li.dataset.editing;
     li.removeEventListener("click", tempHandler, { capture: true });
-
     if (input.parentElement === li) li.removeChild(input);
     spanitemText.style.display = "";
-    button.disabled = false;
+
+    // Entferne den temporären Save-Handler
+    try {
+      if (button && button._saveHandler) {
+        button.removeEventListener('click', button._saveHandler);
+        delete button._saveHandler;
+      }
+    } catch (e) { console.error(e); }
+
+    try {
+      if (touchscreen && button && button.parentElement) {
+        const newBtn = button.cloneNode(true);
+        newBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          try { editListItem(this); } catch (err) { console.error(err); }
+        });
+        button.parentElement.replaceChild(newBtn, button);
+        newBtn.classList.remove('editing');
+        newBtn.disabled = false;
+        newBtn.blur && newBtn.blur();
+        setTimeout(() => newBtn.blur && newBtn.blur(), 10);
+      } else {
+        button.classList.remove('editing');
+        button.disabled = false;
+        button.blur && button.blur();
+      }
+    } catch (e) {
+      try { button.classList.remove('editing'); } catch (e) {}
+      try { button.disabled = false; } catch (e) {}
+      try { button.blur && button.blur(); } catch (e) {}
+    }
   }
 }
 
@@ -1759,21 +1971,20 @@ document.addEventListener("DOMContentLoaded", function () {
   const listElements = document.getElementById("listElements");
   const listOverview = document.getElementById("listOverview");
   const loginDiv = document.getElementById("login");
+  const listSpeiseplan = document.getElementById("listSpeiseplanHistory");
 
   function isAuthenticated() {
     // Der Server setzt ein nicht-HTTP-only `username`-Cookie zusammen mit einem HTTP-only `token`.
     // Da `token` HTTP-only ist und clientseitig nicht lesbar, prüfen wir auf `username=`.
     return document.cookie.split(";").some((c) => c.trim().startsWith("username="));
   }
-
+  
   if (isAuthenticated()) {
     if (loginDiv) loginDiv.style.display = "none";
-
-
-
     if (urlFilename) {
       if (listElements) listElements.style.display = "";
       if (listOverview) listOverview.style.display = "none";
+      if (listSpeiseplan) listSpeiseplan.style.display = "none";
       loadList();
         // Inaktivitäts-Timer für geöffnete Liste starten
         try { startInactivityTimer(); } catch (e) {}
@@ -1784,6 +1995,7 @@ document.addEventListener("DOMContentLoaded", function () {
     } else {
       if (listElements) listElements.style.display = "none";
       if (listOverview) listOverview.style.display = "";
+      if (listSpeiseplan) listSpeiseplan.style.display = "none";
         // Falls wir in der Übersicht sind: Inaktivitäts-Timer stoppen
         try { stopInactivityTimer(); } catch (e) {}
         fetchAllLists(showServerLists, function (error) {
@@ -1794,6 +2006,7 @@ document.addEventListener("DOMContentLoaded", function () {
     if (loginDiv) loginDiv.style.display = "";
     if (listElements) listElements.style.display = "none";
     if (listOverview) listOverview.style.display = "none";
+    if (listSpeiseplan) listSpeiseplan.style.display = "none";
   }
 
   // Buttons
@@ -1945,11 +2158,7 @@ document.addEventListener("DOMContentLoaded", function () {
     if (nw !== conf) return showStatus('Neues Passwort und Bestätigung stimmen nicht überein.', 'error');
 
     try {
-      const resp = await fetch('bin/backend.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'change_password', currentPassword: cur, newPassword: nw, username: typeof username !== 'undefined' ? username : undefined }),
-      });
+      const resp = await postToBackend({ action: 'change_password', currentPassword: cur, newPassword: nw, username: typeof username !== 'undefined' ? username : undefined });
       let data = null;
       try { data = await resp.json(); } catch (e) { /* ignorieren */ }
       if (!resp.ok) {
@@ -1974,13 +2183,38 @@ document.addEventListener("DOMContentLoaded", function () {
   const moreMenu = document.getElementById('moreMenu');
   function closeMoreMenu() {
     if (!moreMenu) return;
+    try {
+      const active = document.activeElement;
+      if (active && moreMenu.contains(active)) {
+        try { active.blur && active.blur(); } catch (e) {}
+      }
+    } catch (e) {}
     moreMenu.style.display = 'none';
-    moreMenu.setAttribute('aria-hidden', 'true');
+    try {
+      if ('inert' in HTMLElement.prototype) {
+        try { moreMenu.inert = true; } catch (e) {}
+        moreMenu.removeAttribute('aria-hidden');
+      } else {
+        moreMenu.setAttribute('aria-hidden', 'true');
+      }
+    } catch (e) { try { moreMenu.setAttribute('aria-hidden', 'true'); } catch (e) {} }
+    try { if (moreBtn && typeof moreBtn.focus === 'function') moreBtn.focus(); } catch (e) {}
   }
   function openMoreMenu() {
     if (!moreMenu) return;
     moreMenu.style.display = 'block';
-    moreMenu.setAttribute('aria-hidden', 'false');
+    try {
+      if ('inert' in HTMLElement.prototype) {
+        try { moreMenu.inert = false; } catch (e) {}
+        moreMenu.removeAttribute('aria-hidden');
+      } else {
+        moreMenu.setAttribute('aria-hidden', 'false');
+      }
+    } catch (e) { try { moreMenu.setAttribute('aria-hidden', 'false'); } catch (e) {} }
+    try {
+      const first = moreMenu.querySelector('button, a, [tabindex]:not([tabindex="-1"])');
+      if (first && typeof first.focus === 'function') first.focus();
+    } catch (e) {}
   }
   if (moreBtn && moreMenu) {
     moreBtn.addEventListener('click', (e) => {
@@ -2008,6 +2242,9 @@ document.addEventListener("DOMContentLoaded", function () {
     document.getElementById('menuShowHelp')?.addEventListener('click', (e) => {
       e.stopPropagation(); closeMoreMenu(); openHelp();
     });
+    document.getElementById('menuShowSpeiseplan')?.addEventListener('click', (e) => {
+      e.stopPropagation(); closeMoreMenu(); openSpeiseplanHistory();
+    });
     document.getElementById('menuDataProtection')?.addEventListener('click', (e) => {
       e.stopPropagation(); closeMoreMenu(); _openModal('dataProtectionModal', '#downloadUserDataBtn');
     });
@@ -2029,11 +2266,7 @@ document.addEventListener("DOMContentLoaded", function () {
         try { btn.disabled = true; } catch (e) {}
         showStatus('Erzeuge Archiv, bitte warten...', 'change');
 
-        fetch('bin/backend.php', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'download', username: typeof username !== 'undefined' ? username : undefined })
-        })
+        postToBackend({ action: 'download', username: typeof username !== 'undefined' ? username : undefined })
           .then((res) => res.json())
           .then((data) => {
             if (data && data.success && data.token) {
@@ -2074,12 +2307,7 @@ document.addEventListener("DOMContentLoaded", function () {
       if (!pwd) { showStatus('Bitte das aktuelle Passwort eingeben.', 'error'); try { _confirmDeleteBtn.disabled = false; } catch (e) {} return; }
       try {
         showStatus('Lösche Konto...', 'change');
-        const resp = await fetch('bin/backend.php', {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'delete_account', password: pwd, username: typeof username !== 'undefined' ? username : undefined }),
-        });
+        const resp = await postToBackend({ action: 'delete_account', password: pwd, username: typeof username !== 'undefined' ? username : undefined });
         let data = null; try { data = await resp.json(); } catch (e) { data = null; }
         if (!resp.ok) {
           const msg = data && (data.error || data.message) ? (data.error || data.message) : ('Server antwortet mit ' + resp.status);
@@ -2138,12 +2366,6 @@ document.addEventListener("DOMContentLoaded", function () {
     document.removeEventListener('keydown', _helpKeyHandler);
   }
 
-  function _helpKeyHandler(e) {
-    if (e.key === 'Escape') {
-      try { closeHelp(); } catch (err) {}
-    }
-  }
-
   // Klick auf Hintergrund des Overlays schließt die Hilfe
   try {
     const helpRoot = document.getElementById('helpTexts');
@@ -2157,11 +2379,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // Einladung erstellen: kein Modal — Invite erzeugen und Link in die Zwischenablage kopieren
   async function createInvite() {
     try {
-      const resp = await fetch('bin/backend.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'create_invite' }),
-      });
+      const resp = await postToBackend({ action: 'create_invite' });
       let data = null; try { data = await resp.json(); } catch (e) { data = null; }
       if (!resp.ok) {
         const msg = data && (data.error || data.message) ? (data.error || data.message) : ('Serverfehler: ' + resp.status);
@@ -2196,11 +2414,7 @@ document.addEventListener("DOMContentLoaded", function () {
     if (!cur) return showStatus('Bitte aktuelles Passwort eingeben.', 'error');
 
     try {
-      const resp = await fetch('bin/backend.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'change_username', newUsername: newU, password: cur }),
-      });
+      const resp = await postToBackend({ action: 'change_username', newUsername: newU, password: cur });
       let data = null;
       try { data = await resp.json(); } catch (e) { /* ignorieren */ }
       if (!resp.ok) {
@@ -2239,12 +2453,7 @@ document.addEventListener("DOMContentLoaded", function () {
     if (newDisplay.length > 512) return showStatus('Anzeigename zu lang.', 'error');
 
     try {
-      const resp = await fetch('bin/backend.php', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'change_displayname', newDisplayName: newDisplay })
-      });
+      const resp = await postToBackend({ action: 'change_displayname', newDisplayName: newDisplay });
       let data = null; try { data = await resp.json(); } catch (e) { data = null; }
       if (!resp.ok) {
         const msg = data && (data.error || data.message) ? (data.error || data.message) : ('Server antwortet mit ' + resp.status);
@@ -2320,11 +2529,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!newEmail) { showStatus('Bitte eine neue E-Mail-Adresse eingeben.', 'error'); return; }
     if (!password) { showStatus('Bitte dein aktuelles Passwort eingeben.', 'error'); return; }
 
-    fetch('bin/backend.php', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'change_email', newEmail: newEmail, password: password })
-    })
+    postToBackend({ action: 'change_email', newEmail: newEmail, password: password })
       .then((r) => r.json())
       .then((data) => {
         if (data && data.success) {

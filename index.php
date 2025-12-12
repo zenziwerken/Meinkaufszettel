@@ -72,7 +72,7 @@ $listNameOutput = htmlspecialchars(
 
 // --- Stylesheet-Versionierung ---
 $styleVersion  = file_exists(__DIR__ . '/links/style.css') ? date("Y-m-d_H-i-s", filemtime(__DIR__ . '/links/style.css')) : time();
-$styleVersion2 = file_exists(__DIR__ . '/links/pyro.css') ? date("Y-m-d_H-i-s", filemtime(__DIR__ . '/links/pyro.css')) : time();
+$styleVersion2 = file_exists(__DIR__ . '/links/pyro.css')  ? date("Y-m-d_H-i-s", filemtime(__DIR__ . '/links/pyro.css'))  : time();
 $scriptVersion = file_exists(__DIR__ . '/bin/frontend.js') ? date("Y-m-d_H-i-s", filemtime(__DIR__ . '/bin/frontend.js')) : time();
 
 // --- Dynamisches CSS für Speiseplan ---
@@ -114,9 +114,13 @@ if (!empty($displayName)) {
     }
 }
 
-$createInviteLink = '';
+$specialMenuItems = '';
 if ($isAdmin) {
-    $createInviteLink = '<hr><button id="menuCreateInvite" class="menu-item invite">Einladungslink erstellen</button>';
+    $specialMenuItems = '<hr><button id="menuCreateInvite" class="menu-item invite">Einladungslink erstellen</button>';
+}
+if (file_exists($userDir . '/history.txt')) {
+    $specialMenuItems .= ($specialMenuItems === '') ? '<hr>' : '';
+    $specialMenuItems .= '<button id="menuShowSpeiseplan" class="menu-item speiseplan">Speiseplanverlauf</button>';
 }
 ?>
 <!DOCTYPE html>
@@ -154,7 +158,7 @@ if ($isAdmin) {
                 <h1>Erster Start</h1>
                 <p class="hint">Willkommen beim <strong>Meinaufszettel</strong>. Wähle einen <strong>Benutzernamen</strong> und ein <strong>Passwort</strong> um das Benutzerkonto zu aktivieren. Die <strong>E-Mail</strong> wird ausschließlich verwendet, wenn du dein Passwort vergessen hast.</p>
                 <div>
-                    <form>
+                    <form name="registerForm">
                         <input type="text" id="inviteInput" placeholder="Invite-Token (falls nicht per Link)" value="<?= htmlspecialchars($inviteParam) ?>">
                         <input type="text" id="registerUsername" placeholder="Benutzername (a-zA-Z0-9_-)">
                         <input type="password" id="passCode" placeholder="Passwort">
@@ -166,6 +170,7 @@ if ($isAdmin) {
             <div id="login"></div>
             <div id="listOverview"></div>
             <div id="listElements"></div>
+            <div id="listSpeiseplanHistory" class="speiseplan-history"></div>
             <div id="status"></div>
         <?php else: ?>
 
@@ -174,7 +179,7 @@ if ($isAdmin) {
                 <span class="icon"></span>
                 <h1>Meinkaufszettel</h1>
                 <div>
-                    <form>
+                    <form name="loginForm">
                         <input type="text" id="loginUsername" placeholder="Benutzername" autocomplete="username">
                         <input type="password" id="passCode" placeholder="Passwort" autocomplete="current-password">
                         <button id="loginBtn" class="btn" type="button">Anmelden</button>
@@ -192,7 +197,7 @@ if ($isAdmin) {
                     <button id="menuChangeUsername" class="menu-item username">Benutzername ändern</button>
                     <button id="menuChangePassword" class="menu-item password">Passwort ändern</button>
                     <button id="menuChangeEMail" class="menu-item email">E-Mail ändern</button>
-                    <?= $createInviteLink ?>
+                    <?= $specialMenuItems ?>
                     <hr>
                     <button id="menuDataProtection" class="menu-item dataprodtection">Datenschutz</button>
                     <hr>
@@ -226,6 +231,14 @@ if ($isAdmin) {
                 </div>
             </div>
 
+            <!-- Verlauf Speiseplan -->
+            <div id="listSpeiseplanHistory" class="speiseplan-history"  aria-hidden="true">
+                <span class="close" id="speiseplanbackBtn" title="zurück zur Übersicht"></span>
+                <span class="icon"></span>
+                <h1>Speiseplanverlauf</h1>
+                <ul id="itemListSpeiseplan"></ul>
+            </div>
+
             <!-- Hilfetexte (Overlay/Modal) -->
             <div id="helpTexts" class="help" aria-hidden="true">
                 <div class="help-inner" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
@@ -256,7 +269,7 @@ if ($isAdmin) {
                     <button id="closeChangePwd" class="modal-close" aria-label="Schließen">×</button>
                     <h2 class="modal-title">Passwort ändern</h2>
                     <div class="modal-body">
-                        <form>
+                        <form name="changePasswordForm">
                             <input type="text" name="username" autocomplete="username" value="<?= htmlspecialchars($username ?? '') ?>" tabindex="-1" class="visually-hidden-username" aria-hidden="true">
                             <input type="password" id="currentPassword" placeholder="Aktuelles Passwort" autocomplete="current-password">
                             <input type="password" id="newPassword" placeholder="Neues Passwort (mind. 6 Zeichen)" autocomplete="new-password">
@@ -306,7 +319,7 @@ if ($isAdmin) {
                     <button id="closeChangeEmail" class="modal-close" aria-label="Schließen">×</button>
                     <h2 class="modal-title">E-Mail ändern</h2>
                     <div class="modal-body">
-                        <form>
+                        <form name="changeEmailForm">
                             <input type="text" name="username" autocomplete="username" value="<?= htmlspecialchars($username ?? '') ?>" tabindex="-1" class="visually-hidden-username" aria-hidden="true">
                             <input type="email" id="newEmail" placeholder="Neue E-Mail-Adresse" autocomplete="email">
                             <input type="password" id="currentPasswordForEmail" placeholder="Aktuelles Passwort" autocomplete="current-password">
@@ -342,27 +355,41 @@ if ($isAdmin) {
                     <h2 class="modal-title">Benutzerkonto dauerhaft löschen</h2>
                     <div class="modal-body">
                         <p>Diese Aktion löscht Dein Benutzerkonto und alle zugehörigen Daten dauerhaft. Dies kann nicht rückgängig gemacht werden.</p>
-                        <form>
+                        <form name="confirmDeleteForm">
                             <label for="confirmDeletePassword">Aktuelles Passwort</label>
                             <input type="text" name="username" autocomplete="username" value="<?= htmlspecialchars($username ?? '') ?>" tabindex="-1" class="visually-hidden-username" aria-hidden="true">
                             <input id="confirmDeletePassword" type="password" autocomplete="current-password" placeholder="Ihr Passwort">
                             <div class="modal-actions">
-                                <button id="cancelDeleteBtn" type="button" class="btn btn-danger">Abbrechen</button>
-                                <button id="confirmDeleteBtn" type="button" class="btn btn-primary">Benutzerkonto löschen</button>
+                                <button id="cancelDeleteBtn" type="button" class="btn btn-primary">Abbrechen</button>
+                                <button id="confirmDeleteBtn" type="button" class="btn btn-danger">Benutzerkonto löschen</button>
                             </div>
                         </form>
                     </div>
                 </div>
             </div>
 
+            <!-- Modal zum Löschen einer Liste -->
+            <div id="deleteListModal" class="modal" aria-hidden="true" role="dialog" aria-modal="false">
+                <div class="modal-inner">
+                    <button id="closeDeleteList" class="modal-close" aria-label="Schließen">×</button>
+                    <h2 class="modal-title">Liste löschen</h2>
+                    <div class="modal-body">
+                        <p id="deleteListModalText">Möchten Sie die Liste <strong id="deleteListModalName"></strong> wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.</p>
+                        <div class="modal-actions">
+                            <button id="cancelDeleteListBtn" type="button" class="btn btn-primary">Abbrechen</button>
+                            <button id="confirmDeleteListBtn" type="button" class="btn btn-danger">Liste löschen</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         <?php endif; ?>
 
     </div>
     <script>
         const speiseplanName = <?= json_encode($speiseplanName) ?>;
         const csrfToken = <?= json_encode($_SESSION['csrf_token'] ?? '') ?>;
-        const syncInterval = <?= $syncInterval ?>;
-        const inactivityTimeoutMs = <?= $inactivityTimeoutMs ?>;
+        const syncInterval = <?= $syncInterval ?> * 1000;
+        const inactivityTimeout = <?= $inactivityTimeout ?> * 60 * 1000;
         const username = <?= json_encode($username) ?>;
         // optional: Invite-Token in der URL (für Registrierung verwendet)
         const inviteToken = new URLSearchParams(window.location.search).get('invite');
@@ -388,7 +415,7 @@ if ($isAdmin) {
                     const cont = document.getElementById('firstRunBanner');
                     if (!cont) return;
                     const token = String(data.invite || '').replace(/[^a-zA-Z0-9_-]/g, '');
-                    cont.style.display = '';
+                    cont.style.display = 'block';
                     cont.className = 'first-run-banner';
                     cont.innerHTML = '<strong>Installation erfolgreich.</strong><br><span>Klicke hier um das</span> <a href="?invite=' + encodeURIComponent(token) + '">erste Benutzerkonto  zu erstellen</a>';
                 }

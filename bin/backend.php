@@ -60,7 +60,10 @@ if ($isGetDownload) {
 }
 
 // Bestimme den angefragten Benutzernamen (entweder im Payload oder über das Cookie)
-$reqUsername = isset($data['username']) ? trim((string)$data['username']) : (isset($_COOKIE['username']) ? trim((string)$_COOKIE['username']) : null);
+$reqUsername = isset($_COOKIE['username']) ? trim((string)$_COOKIE['username']) : null;
+if ($action === 'login' || $action === 'register' || $action === 'firstRun') {
+    $reqUsername = isset($data['username']) ? trim((string)$data['username']) : null;
+}
 if ($reqUsername !== null && !preg_match($usernameMatch, $reqUsername)) {
     sendError('Ungültiger Benutzername.', 400);
 }
@@ -361,12 +364,33 @@ if (!isset($_SESSION['auth_user']) || $_SESSION['auth_user'] === '') {
         touch($tokenFile);
     }
 }
-// Wenn die Anfrage keinen Benutzernamen spezifiziert hat, verwende bevorzugt den in der Session gespeicherten Benutzernamen
-if ($reqUsername === null) {
-    $reqUsername = $_SESSION['auth_user'];
-    $userDir = $usersDir . '/' . $reqUsername;
-    $userPasswordFile = $userDir . '/.password';
-    $userTokenDir = $userDir . '/tokens';
+// Für nicht-öffentliche Aktionen: zwingend den in der Session angemeldeten Benutzer verwenden
+// (ignoriere `username` aus dem POST-Payload). Für öffentliche Aktionen gilt die
+// bisherige Logik weiterhin (z.B. `list`, `load`, `shared`, `download`).
+try {
+    if (!in_array($action, $publicActions, true)) {
+        $currentUser = $_SESSION['auth_user'] ?? null;
+        if ($currentUser === null || $currentUser === '') {
+            sendError('Nicht autorisiert. Bitte erneut anmelden.', 401);
+        }
+        $reqUsername = $currentUser;
+        $userDir = $usersDir . '/' . $reqUsername;
+        $userPasswordFile = $userDir . '/.password';
+        $userTokenDir = $userDir . '/tokens';
+    } else {
+        // Öffentliche Aktion: falls kein username angegeben, verwende Session-Benutzer falls vorhanden
+        if ($reqUsername === null) {
+            $reqUsername = $_SESSION['auth_user'] ?? null;
+            if ($reqUsername !== null) {
+                $userDir = $usersDir . '/' . $reqUsername;
+                $userPasswordFile = $userDir . '/.password';
+                $userTokenDir = $userDir . '/tokens';
+            }
+        }
+    }
+} catch (Throwable $e) {
+    // Sicherheits-Fallback: falls etwas schiefgeht, verweigern wir die Aktion sicherheitshalber
+    sendError('Authentifizierungsprüfungsfehler.', 403);
 }
 
 // Passwort wechseln: nur für authentifizierte/aktuelle Benutzer
@@ -407,6 +431,7 @@ if ($action === 'change_password') {
 
     // Setze cookie token abgelaufen (sicherer client-fallback)
     setcookie('token', '', [ 'expires' => time() - 3600, 'path' => '/', 'samesite' => 'Strict' ]);
+    setcookie('username', '', [ 'expires' => time() - 3600, 'path' => '/', 'samesite' => 'Strict' ]);
 
     // Session zurücksetzen (erzwungenes Re-Login)
     if (isset($_SESSION['auth_user'])) unset($_SESSION['auth_user']);
@@ -754,6 +779,42 @@ if ($action === 'load') {
     exit;
 }
 
+// Speiseplan-Verlauf aus history.txt lesen
+if ($action === 'speiseplan_history') {
+    if ($userDir === null) sendError('Kein Benutzer angegeben.', 400);
+    $historyFile = $userDir . '/history.txt';
+    if (!file_exists($historyFile)) {
+        echo json_encode(['success' => true, 'history' => []], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    $lines = @file($historyFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if ($lines === false) sendError('Fehler beim Lesen der Verlauf-Datei.', 500);
+    $lines = array_reverse($lines);
+    // Vereinfachte Ausgabe: nur deutsche Wochentagsabkürzungen
+    $weekdayNames = ['So.', 'Mo.', 'Di.', 'Mi.', 'Do.', 'Fr.', 'Sa.'];
+    $out = [];
+    foreach ($lines as $ln) {
+        // Erwartetes Format: YYYY-MM-DD[TAB]Beschreibung
+        $parts = preg_split('/\t+/', $ln, 2);
+        if (count($parts) === 2) {
+            $ts = strtotime(trim($parts[0]));
+            $weekday = ($ts === false) ? '' : $weekdayNames[(int)date('w', $ts)];
+            $date = ($ts === false) ? '' : date('d.m.', $ts);
+            $text = trim($parts[1]);
+        } else {
+            // Fallback: erstes Wort als Datum, Rest als Text
+            $parts2 = preg_split('/\s+/', $ln, 2);
+            $ts = isset($parts2[0]) ? strtotime(trim($parts2[0])) : false;
+            $weekday = ($ts === false) ? '' : $weekdayNames[(int)date('w', $ts)];
+            $date = ($ts === false) ? '' : date('d.m.', $ts);
+            $text = isset($parts2[1]) ? trim($parts2[1]) : $ln;
+        }
+        $out[] = ['weekday' => $weekday, 'date' => $date, 'text' => $text];
+    }
+    echo json_encode(['success' => true, 'history' => $out], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 if ($action === 'save') {
     $filename = isset($data['filename']) ? trim((string)$data['filename']) : '';
     $active = $data['active'] ?? null;
@@ -963,9 +1024,7 @@ if ($action === 'download') {
             if ($relative === '' || $relative === false) continue;
             // Aus Sicherheitsgründen bestimmte Dateien/Verzeichnisse ausschließen
             // z.B. Passwort-, Settings- und Token-Dateien
-            if ($relative === '.password') continue;
-            if ($relative === '.settings') continue;
-            if (strpos($relative, 'tokens/') === 0 || strpos($relative, 'tokens\\') === 0) continue;
+            if (in_array($relative, ['.password', '.settings']) || strpos($relative, 'tokens/') === 0 || strpos($relative, 'tokens\\') === 0) continue;
             // Vermeide, dass Zip-Einträge mit reinem Pfadseparator oder ähnlichem entstehen
             $relative = ltrim($relative, '/\\');
             if ($relative === '') continue;

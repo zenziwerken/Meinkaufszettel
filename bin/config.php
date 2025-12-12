@@ -14,11 +14,11 @@ $maxItemsPerList = 200;
 // Maximale Länge eines Listeneintrags
 $maxItemLength = 200; 
 
-// Synchronisations-Intervall für automatischen Abgleich
-$syncInterval = 40 /* Sekunden */ * 1000; 
+// Synchronisations-Intervall für automatischen Abgleich in Sekunden
+$syncInterval = 30; 
 
-// Zurück zur Listenansicht nach x Minuten Inaktivität
-$inactivityTimeoutMs = 10 /* Minuten */ * 60 * 1000; 
+// Zurück zur Listenansicht nach x Minuten Inaktivität in Minuten
+$inactivityTimeout = 10; 
 
 // Erlaube nur Zugriffe von bestimmten Domains (CORS)
 $allowedOrigins = [
@@ -74,4 +74,7 @@ $challengeMaxAgeDays = 365;
 $maxRequests = 5; 
 
 // Zeitfenster in Sekunden   
-$timeWindow = 600;     
+$timeWindow = 600;
+
+// Alte Ratelimit-Dateien in Tagen (Standard: 7 Tage)
+$rateLimitCleanupDays = 7; 
