@@ -143,17 +143,20 @@ $colors = [...]; // HEX-Farben
 ```php
 $maxItemsPerList = 200;    // Max. Einträge pro Liste
 $maxItemLength = 200;      // Max. Zeichen pro Eintrag
-$syncInterval = 40000;     // Auto-Sync-Intervall (ms)
-$inactivityTimeoutMs = 600000; // Inaktivitäts-Timeout (ms)
+$syncInterval = 30;        // Auto-Sync-Intervall (in Sekunden)
+$inactivityTimeoutMs = 10; // Inaktivitäts-Timeout (in Minuten)
 ```
 
 ### Cleanup-Zeiten
 ```php
-$userTokenCleanupDays = 60;    // Alte Session-Tokens
-$invalidResetKeepDays = 30;    // Reset-Tokens
-$challengeMaxAgeDays = 365;    // Challenge-Dateien
+$userTokenCleanupDays = 60; // Alte Session-Tokens
+$invalidResetKeepDays = 30; // Reset-Tokens
+$challengeMaxAgeDays = 365; // Challenge-Dateien
+$maxRequests = 5;           // Max. Anfragen für das Ratelimiting
+$timeWindow = 600;          // Zeitfenster in Sekunden   
+$rateLimitCleanupDays = 7;  // Alte Ratelimit-Dateien in Tagen
 ```
-### Alte Dateien aufräumen
+### Alte Dateien aufräumen und Speiseplanfunktion
 Erstelle einen Cronjob für `data/cron.php`:
 ```bash
 0	20	*	*	* cd /pfad/zu/Meinkaufszettel && php data/cron.php
@@ -189,7 +192,7 @@ Erstelle einen Cronjob für `data/cron.php`:
 
 ## 📄 Lizenz
 
-MIT License - siehe [LICENSE](LICENSE) Datei für Details.
+GPL-3.0 license - siehe [LICENSE](LICENSE) Datei für Details.
 
 ## 🙏 Credits
 
