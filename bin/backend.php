@@ -80,7 +80,7 @@ ensureRequiredDirectories();
 // --- CSRF-Prüfung für authentifizierte schreibende Anfragen ---
 // Wir prüfen nur, wenn die Anfrage voraussichtlich authentifiziert ist (Session oder gültiges Cookie-Token),
 // und die Aktion nicht in der expliziten Allowlist für öffentliche Endpunkte ist.
-$publicActions = ['firstRun', 'list', 'load', 'login', 'register', 'download', 'shared'];
+$publicActions = ['firstRun', 'login', 'register', 'download', 'shared'];
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $willBeAuthenticated = false;
@@ -121,38 +121,21 @@ if ($action === 'register') {
 
     $inviteContentRaw = @file_get_contents($inviteFile);
     if ($inviteContentRaw === false) sendError('Fehler beim Lesen des Invites.', 500);
-    $inviteContent = trim($inviteContentRaw);
-    $reservedUser = null;
-    // Versuche JSON-Format (neuere Invites), sonst fallback auf plain text (älteres Format)
-    $decodedInvite = json_decode($inviteContent, true);
-    if (json_last_error() === JSON_ERROR_NONE && is_array($decodedInvite)) {
-        $reservedUser = isset($decodedInvite['reservedUsername']) && $decodedInvite['reservedUsername'] !== '' ? $decodedInvite['reservedUsername'] : null;
-        // optional: Prüfung auf einmalige Nutzung / Ablauf (singleUse/expiry) möglich
-    } else {
-        $reservedUser = $inviteContent !== '' ? $inviteContent : null;
-    }
-
+    // Hinweis: alte Unterstützung für reservedUsername entfällt — eingeladene Nutzer
+    // wählen nun ihren eigenen Benutzernamen beim Registrieren.
     $desiredUsername = isset($data['username']) ? trim((string)$data['username']) : null;
-    if ($reservedUser !== null) {
-        // Invite reserviert einen Benutzernamen -> nur dieser ist zulässig
-        if (!preg_match($usernameMatch, $reservedUser)) sendError('Invite enthält ungültigen Benutzernamen.', 400);
-        if ($desiredUsername !== null && $desiredUsername !== $reservedUser) sendError('Invite ist für einen anderen Benutzernamen reserviert.', 400);
-        $targetUser = $reservedUser;
-    } else {
-        // Invite erlaubt freie Namenswahl -> Client muss gewünschten Namen angeben
-        if ($desiredUsername === null || $desiredUsername === '') sendError('Bitte gewünschten Benutzernamen angeben.', 400);
-        if (!preg_match($usernameMatch, $desiredUsername)) sendError('Ungültiger Benutzername.', 400);
-        $targetUser = $desiredUsername;
-    }
+    if ($desiredUsername === null || $desiredUsername === '') sendError('Bitte gewünschten Benutzernamen angeben.', 400);
+    if (!preg_match($usernameMatch, $desiredUsername)) sendError('Ungültiger Benutzername.', 400);
+    $targetUser = $desiredUsername;
 
-    if (!isset($data['password'])) sendError('Passwort fehlt.', 400);
+    if (!isset($data['password'])) sendError('Bitte Passwort angeben.', 400);
     // E-Mail für Passwort-Zurücksetzen erwartet
     $email = isset($data['email']) ? trim((string)$data['email']) : null;
-    if ($email === null || $email === '') sendError('E-Mail fehlt.', 400);
+    if ($email === null || $email === '') sendError('Bitte E-Mail angeben.', 400);
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) sendError('Ungültige E-Mail-Adresse.', 400);
 
     $userDir = $usersDir . '/' . $targetUser;
-    if (is_dir($userDir)) sendError('Benutzer existiert bereits.', 409);
+    if (is_dir($userDir)) sendError('Dieser Benutzername ist bereits vergeben.', 409);
     if (!@mkdir($userDir, 0750, true)) sendError('Server-Fehler: Benutzerverzeichnis konnte nicht angelegt werden.', 500);
     $userPasswordFile = $userDir . '/.password';
     $hashedPassword = password_hash($data['password'], PASSWORD_DEFAULT);
@@ -242,12 +225,13 @@ if ($action === 'firstRun') {
 
 // Logout: entferne das aktuelle Token (wenn vorhanden), zerstöre Session und setze Cookies abgelaufen
 if ($action === 'logout') {
-    // Versuche Token aus Cookie zu entfernen
-    $cookieUsername = isset($_COOKIE['username']) ? trim((string)$_COOKIE['username']) : null;
+
     $cookieToken = isset($_COOKIE['token']) ? $_COOKIE['token'] : null;
-    if ($cookieUsername && $cookieToken && preg_match($usernameMatch, $cookieUsername)) {
+    $logoutUser = $_SESSION['auth_user'] ?? null;
+
+    if ($logoutUser !== null && $cookieToken && preg_match($usernameMatch, $logoutUser)) {
         $tokenHash = hash('sha256', $cookieToken);
-        $tokenFile = $usersDir . '/' . $cookieUsername . '/tokens/' . $tokenHash;
+        $tokenFile = $usersDir . '/' . $logoutUser . '/tokens/' . $tokenHash;
         if (file_exists($tokenFile)) {
             @unlink($tokenFile);
         }
@@ -325,11 +309,16 @@ if ($action === 'login') {
             'httponly' => false,
             'samesite' => 'Strict'
         ]);
-
+        if (!is_dir($userTokenDir) && !@mkdir($userTokenDir, 0750, true)){
+            sendError('Konnte Verzeichnis für Usertokens nicht anlegen.', 500);
+        }
+        if (!is_writable($userTokenDir)) {
+            sendError('Verzeichnis für Usertokens ist nicht beschreibbar.', 500);
+        }
         $token = bin2hex(random_bytes(32));
         $tokenHash = hash('sha256', $token);
         $tokenFile = $userTokenDir . '/' . $tokenHash;
-        if (file_put_contents($tokenFile, '-') === false) sendError('Konnte Token-Datei nicht speichern.', 500);
+        if (file_put_contents($tokenFile, $_SERVER['HTTP_USER_AGENT'].' '.$_SERVER['HTTP_SEC_CH_UA']) === false) sendError('Konnte Token-Datei nicht speichern.', 500);
 
         setcookie(
             'token', $token, [

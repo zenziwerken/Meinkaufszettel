@@ -214,6 +214,7 @@ li.speiseplan {
   color: #fff;
   border: none;
   border-radius: 5px;
+  height: 38px;
   cursor: pointer;
   background-color: #8a8a8a;
 }
@@ -272,12 +273,12 @@ li.speiseplan {
 .gitHubIcon {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' height='32' viewBox='0 0 24 24' version='1.1' width='32'%3E%3Cpath fill='%23CACACA' d='M12 1C5.923 1 1 5.923 1 12c0 4.867 3.149 8.979 7.521 10.436.55.096.756-.233.756-.522 0-.262-.013-1.128-.013-2.049-2.764.509-3.479-.674-3.699-1.292-.124-.317-.66-1.293-1.127-1.554-.385-.207-.936-.715-.014-.729.866-.014 1.485.797 1.691 1.128.99 1.663 2.571 1.196 3.204.907.096-.715.385-1.196.701-1.471-2.448-.275-5.005-1.224-5.005-5.432 0-1.196.426-2.186 1.128-2.956-.111-.275-.496-1.402.11-2.915 0 0 .921-.288 3.024 1.128a10.193 10.193 0 0 1 2.75-.371c.936 0 1.871.123 2.75.371 2.104-1.43 3.025-1.128 3.025-1.128.605 1.513.221 2.64.111 2.915.701.77 1.127 1.747 1.127 2.956 0 4.222-2.571 5.157-5.019 5.432.399.344.743 1.004.743 2.035 0 1.471-.014 2.654-.014 3.025 0 .289.206.632.756.522C19.851 20.979 23 16.854 23 12c0-6.077-4.922-11-11-11Z'%3E%3C/path%3E%3C/svg%3E");
   height: 24px;
-    width: 24px;
-    display: inline-block;
-    background-size: 100%;
-    background-repeat: no-repeat;
-    margin-bottom: -5px;
-    margin-left: 5px;
+  width: 24px;
+  display: inline-block;
+  background-size: 100%;
+  background-repeat: no-repeat;
+  margin-bottom: -5px;
+  margin-left: 5px;
 }
 
 .deleteBtn:hover {
@@ -315,7 +316,10 @@ li.speiseplan {
 input[type="text"],
 input[type="password"],
 input[type="email"] {
-  padding: 6px 8px;
+  padding: 0 10px;
+  height: 38px;
+  border-radius: 5px;
+  border: 1px solid #999;
   margin: 5px 10px 0 0;
   width: calc(100% - 144px);
 }
@@ -503,27 +507,37 @@ p.error {
   color: #333;
 }
 
-  /* Icons from Tabler https://tabler.io/icons */
+/* Icons from Tabler https://tabler.io/icons */
 .menu-item.help {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23AAA' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' %3E%3Cpath stroke='none' d='M0 0h24v24H0z' fill='none'/%3E%3Cpath d='M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0' /%3E%3Cpath d='M12 17l0 .01' /%3E%3Cpath d='M12 13.5a1.5 1.5 0 0 1 1 -1.5a2.6 2.6 0 1 0 -3 -4' /%3E%3C/svg%3E");
 }
+
 .menu-item.username {
-background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23AAA' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath stroke='none' d='M0 0h24v24H0z' fill='none'/%3E%3Cpath d='M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0' /%3E%3Cpath d='M6 21v-2a4 4 0 0 1 4 -4h3.5' /%3E%3Cpath d='M19 22v.01' /%3E%3Cpath d='M19 19a2.003 2.003 0 0 0 .914 -3.782a1.98 1.98 0 0 0 -2.414 .483' /%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23AAA' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath stroke='none' d='M0 0h24v24H0z' fill='none'/%3E%3Cpath d='M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0' /%3E%3Cpath d='M6 21v-2a4 4 0 0 1 4 -4h3.5' /%3E%3Cpath d='M19 22v.01' /%3E%3Cpath d='M19 19a2.003 2.003 0 0 0 .914 -3.782a1.98 1.98 0 0 0 -2.414 .483' /%3E%3C/svg%3E");
 }
+
 .menu-item.password {
-background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23AAA' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath stroke='none' d='M0 0h24v24H0z' fill='none'/%3E%3Crect x='5' y='11' width='14' height='10' rx='2' /%3E%3Cpath d='M8 11v-4a4 4 0 0 1 8 0v4' /%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23AAA' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath stroke='none' d='M0 0h24v24H0z' fill='none'/%3E%3Crect x='5' y='11' width='14' height='10' rx='2' /%3E%3Cpath d='M8 11v-4a4 4 0 0 1 8 0v4' /%3E%3C/svg%3E");
 }
+
 .menu-item.email {
-background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23AAA' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath stroke='none' d='M0 0h24v24H0z' fill='none'/%3E%3Crect x='3' y='5' width='18' height='14' rx='2' /%3E%3Cpolyline points='3 7 12 13 21 7' /%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23AAA' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath stroke='none' d='M0 0h24v24H0z' fill='none'/%3E%3Crect x='3' y='5' width='18' height='14' rx='2' /%3E%3Cpolyline points='3 7 12 13 21 7' /%3E%3C/svg%3E");
 }
-.menu-item.invite { 
-background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23AAA' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath stroke='none' d='M0 0h24v24H0z' fill='none'/%3E%3Ccircle cx='9' cy='7' r='4' /%3E%3Cpath d='M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2' /%3E%3Cpath d='M16 11h6m-3 -3v6' /%3E%3C/svg%3E");
-} 
+
+.menu-item.invite {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23AAA' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath stroke='none' d='M0 0h24v24H0z' fill='none'/%3E%3Ccircle cx='9' cy='7' r='4' /%3E%3Cpath d='M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2' /%3E%3Cpath d='M16 11h6m-3 -3v6' /%3E%3C/svg%3E");
+}
+
+.menu-item.speiseplan {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23AAA' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath stroke='none' d='M0 0h24v24H0z' fill='none'/%3E%3Cpath d='M4 11h16a1 1 0 0 1 1 1v.5c0 1.5 -2.517 5.573 -4 6.5v1a1 1 0 0 1 -1 1h-8a1 1 0 0 1 -1 -1v-1c-1.687 -1.054 -4 -5 -4 -6.5v-.5a1 1 0 0 1 1 -1z' /%3E%3Cpath d='M12 4a2.4 2.4 0 0 0 -1 2a2.4 2.4 0 0 0 1 2' /%3E%3Cpath d='M16 4a2.4 2.4 0 0 0 -1 2a2.4 2.4 0 0 0 1 2' /%3E%3Cpath d='M8 4a2.4 2.4 0 0 0 -1 2a2.4 2.4 0 0 0 1 2' /%3E%3C/svg%3E");
+}
+
 .menu-item.dataprodtection {
-background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23aaa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath stroke='none' d='M0 0h24v24H0z' fill='none'/%3E%3Cpath d='M13 3v4a.997 .997 0 0 0 1 1h4' /%3E%3Cpath d='M11 21h-5a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v3.5' /%3E%3Cpath d='M8 9h1' /%3E%3Cpath d='M8 12.994l3 0' /%3E%3Cpath d='M8 16.997l2 0' /%3E%3Cpath d='M21 15.994c0 4 -2.5 6 -3.5 6s-3.5 -2 -3.5 -6c1 0 2.5 -.5 3.5 -1.5c1 1 2.5 1.5 3.5 1.5' /%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23aaa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath stroke='none' d='M0 0h24v24H0z' fill='none'/%3E%3Cpath d='M13 3v4a.997 .997 0 0 0 1 1h4' /%3E%3Cpath d='M11 21h-5a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v3.5' /%3E%3Cpath d='M8 9h1' /%3E%3Cpath d='M8 12.994l3 0' /%3E%3Cpath d='M8 16.997l2 0' /%3E%3Cpath d='M21 15.994c0 4 -2.5 6 -3.5 6s-3.5 -2 -3.5 -6c1 0 2.5 -.5 3.5 -1.5c1 1 2.5 1.5 3.5 1.5' /%3E%3C/svg%3E");
 }
+
 .menu-item.logout {
-background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23AAA' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath stroke='none' d='M0 0h24v24H0z' fill='none'/%3E%3Cpath d='M14 8v-2a2 2 0 0 0 -2 -2h-7a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2 -2v-2' /%3E%3Cpath d='M20 12h-13l3 -3m0 6l-3 -3' /%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23AAA' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath stroke='none' d='M0 0h24v24H0z' fill='none'/%3E%3Cpath d='M14 8v-2a2 2 0 0 0 -2 -2h-7a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2 -2v-2' /%3E%3Cpath d='M20 12h-13l3 -3m0 6l-3 -3' /%3E%3C/svg%3E");
 }
 
 
@@ -569,13 +583,8 @@ background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
   }
 }
 
-/* Modal: Change Password / Username / Invite / Email */
-#changePasswordModal.modal,
-#changeUsernameModal.modal,
-#createInviteModal.modal,
-#changeEmailModal.modal,
-#dataProtectionModal.modal,
-#confirmDeleteModal.modal {
+/* Modal: vereinheitlichte Regeln für alle modalen Dialoge */
+.modal {
   display: none;
   position: fixed;
   inset: 0;
@@ -585,21 +594,11 @@ background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
   background: rgba(0, 0, 0, 0.45);
 }
 
-#changePasswordModal.modal[aria-hidden="false"],
-#changeUsernameModal.modal[aria-hidden="false"],
-#createInviteModal.modal[aria-hidden="false"],
-#changeEmailModal.modal[aria-hidden="false"],
-#dataProtectionModal.modal[aria-hidden="false"],
-#confirmDeleteModal.modal[aria-hidden="false"] {
+.modal[aria-hidden="false"] {
   display: flex;
 }
 
-#changePasswordModal .modal-inner,
-#changeUsernameModal .modal-inner,
-#createInviteModal .modal-inner,
-#changeEmailModal .modal-inner,
-#dataProtectionModal .modal-inner,
-#confirmDeleteModal .modal-inner {
+.modal .modal-inner {
   background: #fff;
   padding: 18px;
   border-radius: 8px;
@@ -610,12 +609,7 @@ background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
 }
 
-#changePasswordModal .modal-close,
-#changeUsernameModal .modal-close,
-#createInviteModal .modal-close,
-#changeEmailModal .modal-close,
-#dataProtectionModal .modal-close,
-#confirmDeleteModal .modal-close,
+.modal .modal-close,
 #helpTexts .modal-close {
   position: absolute;
   right: 8px;
@@ -627,67 +621,39 @@ background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
   color: #666;
 }
 
-#changePasswordModal .modal-close:hover,
-#changeUsernameModal .modal-close:hover,
-#createInviteModal .modal-close:hover,
-#changeEmailModal .modal-close:hover,
-#dataProtectionModal .modal-close:hover,
-#confirmDeleteModal .modal-close:hover,
+.modal .modal-close:hover,
 #helpTexts .modal-close:hover {
   color: #000;
 }
 
-#changePasswordModal .modal-title,
-#changeUsernameModal .modal-title,
-#createInviteModal .modal-title,
-#changeEmailModal .modal-title,
-#helpTexts .modal-title,
-#dataProtectionModal .modal-title,
-#confirmDeleteModal .modal-title {
+.modal .modal-title {
   margin: 0 0 12px 0;
 }
 
-#changePasswordModal .modal-body,
-#changeUsernameModal .modal-body,
-#createInviteModal .modal-body,
-#changeEmailModal .modal-body,
-#dataProtectionModal .modal-body,
-#confirmDeleteModal .modal-body {
+.modal .modal-body {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-#changePasswordModal .modal-body input[type="text"],
-#changePasswordModal .modal-body input[type="password"],
-#changeUsernameModal .modal-body input[type="password"],
-#changeUsernameModal .modal-body input[type="text"],
-#changeEmailModal .modal-body input[type="password"],
-#changeEmailModal .modal-body input[type="email"],
-#confirmDeleteModal .modal-body input[type="password"] {
+/* Inputs innerhalb eines Modals */
+.modal .modal-body input[type="text"],
+.modal .modal-body input[type="password"],
+.modal .modal-body input[type="email"] {
   width: 100%;
   box-sizing: border-box;
   padding: 8px 10px;
   margin: 0 0 8px;
 }
 
-#changePasswordModal .modal-actions,
-#changeUsernameModal .modal-actions,
-#createInviteModal .modal-actions,
-#changeEmailModal .modal-actions,
-#dataProtectionModal .modal-actions,
-#confirmDeleteModal .modal-actions {
+.modal .modal-actions {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
   margin-top: 6px;
 }
 
-#changePasswordModal .modal-actions button,
-#changeUsernameModal .modal-actions button,
-#changeEmailModal .modal-actions button,
-#dataProtectionModal .modal-actions button,
-#confirmDeleteModal .modal-actions button {
+.modal .modal-actions button {
   min-width: 84px;
 }
 
@@ -935,6 +901,35 @@ li.pending-active .undoBtn:hover {
   text-align: center;
 }
 
+#itemListSpeiseplan {
+  margin: 0 0 20px;
+}
+
+#itemListSpeiseplan li {
+  border-bottom: 1px solid #aaa;
+  border-radius: 0;
+  padding: 5px;
+  margin: 0;
+}
+
+#itemListSpeiseplan strong {
+  width: 28px;
+  text-align: left;
+  display: inline-block;
+  padding-left: 3px;
+}
+
+#itemListSpeiseplan span {
+  width: 50px;
+  font-weight: 500;
+  text-align: right;
+  margin-right: 10px;
+  letter-spacing: 0.01rem;
+}
+
+#itemListSpeiseplan li.weekend {
+  background-color: #F3F3F3;
+}
 
 @media (max-width: 37rem) {
   body {
@@ -1019,8 +1014,17 @@ li.pending-active .undoBtn:hover {
 
   .modified {
     font-size: smaller;
+    word-spacing: -2px;
+    margin-left: 2px;
   }
 
+  #itemListSpeiseplan strong {
+    min-width: 40px;
+  }
+
+  #itemListSpeiseplan span {
+    display: none;
+  }
 }
 
 

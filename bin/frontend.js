@@ -654,13 +654,19 @@ function register() {
     showStatus("Bitte Passwort eingeben.", "error");
     return;
   }
+  const regUsername = document.getElementById('registerUsername')?.value?.trim() || '';
+  const regEmail = document.getElementById('registerEmail')?.value?.trim() || '';
 
-  const regUsername = document.getElementById('registerUsername')?.value?.trim();
-  const regEmail = document.getElementById('registerEmail')?.value?.trim();
+  // Username is required for registration (backend enforces this)
+  if (!regUsername) {
+    showStatus('Bitte gewünschten Benutzernamen angeben.', 'error');
+    return;
+  }
+
   postToBackend({
     action: "register",
     password: passCode,
-    username: regUsername || undefined,
+    username: regUsername,
     email: regEmail || undefined,
     invite: (typeof inviteToken !== 'undefined' && inviteToken)
       ? inviteToken

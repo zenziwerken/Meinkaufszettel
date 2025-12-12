@@ -163,7 +163,7 @@ if (file_exists($userDir . '/history.txt')) {
                         <input type="text" id="registerUsername" placeholder="Benutzername (a-zA-Z0-9_-)">
                         <input type="password" id="passCode" placeholder="Passwort">
                         <input type="email" id="registerEmail" placeholder="E-Mail für Passwort-Zurücksetzen">
-                        <button id="registerBtn" class="btn">Festlegen</button>
+                        <button id="registerBtn" class="btn" type="button">Festlegen</button>
                     </form>
                 </div>
             </div>

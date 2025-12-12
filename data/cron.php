@@ -44,7 +44,7 @@ if (is_dir($usersDir)) {
     }
 }
 
-// Garbage collection: remove old token files in user token dirs
+// Cleanup für alte Token-Dateien in den Token-Verzeichnissen
 if (is_dir($usersDir)) {
     $cleanupDays = isset($userTokenCleanupDays) ? (int)$userTokenCleanupDays : 60;
     $threshold = time() - $cleanupDays * 24 * 60 * 60;
@@ -83,3 +83,19 @@ if (isset($resetsDir) && is_dir($resetsDir)) {
         }
     }
 }
+
+// Cleanup für Rate-Limit-Dateien (erzeugt von checkRateLimit)
+if (isset($rateLimitDir) && is_dir($rateLimitDir)) {
+    $now = time();
+    // Standard: 7 Tage Aufbewahrung für Rate-Limit-Dateien
+    $keepDays = isset($rateLimitCleanupDays) ? (int)$rateLimitCleanupDays : 7;
+    $threshold = $now - ($keepDays * 24 * 60 * 60);
+    foreach (glob($rateLimitDir . '/*') as $rfile) {
+        if (!is_file($rfile)) continue;
+        $mtime = filemtime($rfile);
+        if ($mtime !== false && $mtime < $threshold) {
+            @unlink($rfile);
+        }
+    }
+}
+
