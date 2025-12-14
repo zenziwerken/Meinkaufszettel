@@ -28,7 +28,7 @@ Eine schlanke, selbst-gehostete Web-App für gemeinsame Einkaufslisten und Notiz
 ### Benutzerfreundlichkeit
 - **5-Sekunden-Undo**: Versehentlich gelöschte/abgehakte Einträge rückgängig machen
 - **Touch-optimiert**: Perfekt bedienbar auf Smartphones
-- **Inaktivitäts-Timer**: Kehrt automatisch zur Übersicht zurück
+- **Dark-Mode**: honoriert die Systemeninstellung, oder frei wählbar
 - **Barrierearm**: Tastaturnavigation, ARIA-Labels, semantisches HTML
 
 ### Sicherheit & Datenschutz
@@ -127,8 +127,9 @@ $resetTokenExpiry = 3600; // 1 Stunde
 
 Listen mit dem Namen **"Speiseplan"** erhalten automatisch:
 - Farbcodierung nach Wochentagen (Mo–So)
-- Automatisches Wechseln zum nächsten Tag um 20 Uhr (nur bei Verwendung von cron.php)
+- Automatisches Wechseln zum nächsten Tag um 20 Uhr (bei Verwendung von cron.php)
 - Spezielle Darstellung für Essensplanung
+- History-Funktion: Liste der vergangenen Speisen
 
 Anpassbar in `bin/config.php`:
 ```php
