@@ -28,7 +28,7 @@ Eine schlanke, selbst-gehostete Web-App für gemeinsame Einkaufslisten und Notiz
 ### Benutzerfreundlichkeit
 - **5-Sekunden-Undo**: Versehentlich gelöschte/abgehakte Einträge rückgängig machen
 - **Touch-optimiert**: Perfekt bedienbar auf Smartphones
-- **Dark-Mode**: honoriert die Systemeninstellung, oder frei wählbar
+- **Dark-Mode**: berücksichtigt Systemeinnstellung, oder frei wählbar
 - **Barrierearm**: Tastaturnavigation, ARIA-Labels, semantisches HTML
 
 ### Sicherheit & Datenschutz
