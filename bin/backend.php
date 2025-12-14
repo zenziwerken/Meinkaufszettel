@@ -5,6 +5,7 @@ require __DIR__ . '/config.php';
 require __DIR__ . '/helper.php';
 
 header('Content-Type: application/json');
+header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;");
 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 $normalizedOrigin = $origin ? rtrim($origin, '/') : '';
@@ -42,7 +43,7 @@ if (!$isGetDownload) {
     if ($input === false) {
         sendError('Fehler beim Lesen des Request-Körpers.', 400);
     }
-    $data = json_decode($input, true);
+    $data = json_decode($input, true, 512, JSON_THROW_ON_ERROR);
     if (json_last_error() !== JSON_ERROR_NONE) {
         sendError('Ungültiges JSON-Format.', 400);
     }
@@ -80,7 +81,7 @@ ensureRequiredDirectories();
 // --- CSRF-Prüfung für authentifizierte schreibende Anfragen ---
 // Wir prüfen nur, wenn die Anfrage voraussichtlich authentifiziert ist (Session oder gültiges Cookie-Token),
 // und die Aktion nicht in der expliziten Allowlist für öffentliche Endpunkte ist.
-$publicActions = ['firstRun', 'login', 'register', 'download', 'shared'];
+$publicActions = ['firstRun', 'login', 'register', 'download'];
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $willBeAuthenticated = false;
@@ -283,7 +284,10 @@ if ($action === 'login') {
 
     if (password_verify($data['password'], $stored)) {
 
-        try { session_regenerate_id(true); } catch (Throwable $e) {}
+        if (!session_regenerate_id(true)) {
+            // Session-ID konnte nicht regeneriert werden - kritischer Fehler
+            sendError('Session-Fehler. Bitte Browser-Cache leeren und erneut versuchen.', 500);
+        }
         // Session für diesen Benutzer als authentifiziert markieren
         $_SESSION['auth_user'] = $reqUsername;
 
@@ -449,7 +453,7 @@ if ($action === 'change_username') {
 
     $stored = @file_get_contents($currentPasswordFile);
     if ($stored === false || $stored === '') sendError('Benutzer-Passwort nicht gesetzt.', 500);
-    if (!password_verify($password, $stored)) sendError('Ungültiges Passwort.', 401);
+    if (!password_verify($password, $stored)) sendError('Ungültige Anmeldedaten.', 401);
 
     // Zielverzeichnis prüfen
     $newUserDir = $usersDir . '/' . $newUsername;
@@ -534,7 +538,7 @@ if ($action === 'change_email') {
 
     $stored = @file_get_contents($userPasswordFile);
     if ($stored === false || $stored === '') sendError('Benutzer-Passwort nicht gesetzt.', 500);
-    if (!password_verify($password, $stored)) sendError('Ungültiges Passwort.', 401);
+    if (!password_verify($password, $stored)) sendError('Ungültige Anmeldedaten.', 401);
 
     $emailFile = $userDir . '/.settings';
     // Merge mit vorhandenen Settings (falls vorhanden), um Felder wie displayName zu erhalten
@@ -1070,7 +1074,7 @@ if ($action === 'delete_account' || $action === 'quit_account') {
     if (!file_exists($passwordFile)) sendError('Benutzer nicht gefunden.', 404);
     $stored = @file_get_contents($passwordFile);
     if ($stored === false || $stored === '') sendError('Benutzer-Passwort nicht gesetzt.', 500);
-    if (!password_verify($password, $stored)) sendError('Ungültiges Passwort.', 401);
+    if (!password_verify($password, $stored)) sendError('Ungültige Anmeldedaten.', 401);
 
     // Sicherheits-Check: validiere Pfad
     if (!validatePath($usersDir, $currentUser)) sendError('Ungültiger Pfad.', 400);

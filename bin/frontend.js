@@ -1711,9 +1711,41 @@ function fetchSpeiseplanHistory() {
         if (w === 'Sa.' || w === 'So.') {
           li.classList.add('weekend');
         }
+        // Speise-Text als Dataset speichern für einfachen Vergleich
+        li.dataset.speiseText = String(t || '').trim();
+
         li.appendChild(strong);
         li.appendChild(span);
-        li.appendChild(document.createTextNode(' ' + t));
+        li.appendChild(document.createTextNode(t));
+
+        // Klick auf einen Eintrag: gleiche Texte markieren / entmarkieren
+        li.addEventListener('click', function (e) {
+          try {
+            const containerEl = document.getElementById('itemListSpeiseplan');
+            if (!containerEl) return;
+
+            const isCurrentlyMarked = this.classList.contains('speiseplan-marked');
+
+            // Entferne Markierungen und Inline-Styles von allen Einträgen
+            Array.from(containerEl.querySelectorAll('li')).forEach((el) => {
+              el.classList.remove('speiseplan-marked');
+              try { el.style.backgroundColor = ''; } catch (e) {}
+            });
+
+            // Falls der angeklickte Eintrag vorher nicht markiert war, markiere alle mit gleichem Text
+            if (!isCurrentlyMarked) {
+              const text = (this.dataset.speiseText || '').trim();
+              Array.from(containerEl.querySelectorAll('li')).forEach((el) => {
+                if ((el.dataset.speiseText || '').trim() === text) {
+                  el.classList.add('speiseplan-marked');
+                  try { el.style.backgroundColor = '#fff5b1'; } catch (e) {}
+                }
+              });
+            }
+          } catch (err) {
+            console.error('Fehler beim Markieren gleicher Speiseplan-Einträge:', err);
+          }
+        });
         itemListSpeiseplan.appendChild(li);
       }
 
@@ -2553,5 +2585,65 @@ document.addEventListener('DOMContentLoaded', function () {
   // Modal beim Klicken auf den Hintergrund schließen
   if (modal) modal.addEventListener('click', function (e) {
     if (e.target === modal) hideModal();
+  });
+});
+
+// --- Menü-Handler: Dark Mode setzen (Cookie 'mode=dark') ---
+document.addEventListener('DOMContentLoaded', function () {
+  const darkBtn = document.getElementById('menuDarkMode');
+  if (!darkBtn) return;
+  // Initial theme and button label: prefer cookie; otherwise use system preference
+  try {
+    const cookieMatch = (document.cookie.match(/(?:^|;\s*)mode=([^;]+)/) || []);
+    const cookieMode = cookieMatch[1] || '';
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+    // Apply theme to body
+    if (cookieMode === 'dark' || cookieMode === 'light') {
+      document.body.classList.remove(cookieMode === 'dark' ? 'light' : 'dark');
+      document.body.classList.add(cookieMode);
+    } else {
+      document.body.classList.add(prefersDark ? 'dark' : 'light');
+    }
+
+    // Set button label according to effective mode
+    const effective = cookieMode || (prefersDark ? 'dark' : 'light');
+    if (cookieMode) {
+      darkBtn.textContent = (cookieMode === 'dark') ? 'Light Mode' : 'Dark Mode';
+    } else {
+      darkBtn.textContent = 'Design: System (' + (prefersDark ? 'Dark' : 'Light') + ')';
+    }
+  } catch (e) {}
+
+  darkBtn.addEventListener('click', function (e) {
+    e.preventDefault();
+    try { if (typeof closeMoreMenu === 'function') closeMoreMenu(); } catch (err) {}
+
+    // read current cookie mode
+    let current = '';
+    try { current = (document.cookie.match(/(?:^|;\s*)mode=([^;]+)/) || [])[1] || ''; } catch (e) { current = ''; }
+    // toggle between dark and light (click always sets explicit preference)
+    const next = current === 'dark' ? 'light' : 'dark';
+
+    try {
+      const d = new Date();
+      d.setFullYear(d.getFullYear() + 1);
+      document.cookie = 'mode=' + next + '; path=/; expires=' + d.toUTCString() + '; SameSite=Lax';
+    } catch (e) {
+      try { document.cookie = 'mode=' + next + '; path=/; SameSite=Lax'; } catch (e) {}
+    }
+
+    try { if (window.cookieStore && cookieStore.set) cookieStore.set({ name: 'mode', value: next, path: '/' }).catch(() => {}); } catch (e) {}
+
+    try {
+      document.body.classList.remove(next === 'dark' ? 'light' : 'dark');
+      document.body.classList.add(next);
+    } catch (e) {}
+
+    try {
+      darkBtn.textContent = (next === 'dark') ? 'Light Mode' : 'Dark Mode' ;
+    } catch (e) {}
+
+    setTimeout(() => { try { location.reload(); } catch (e) {} }, 150);
   });
 });

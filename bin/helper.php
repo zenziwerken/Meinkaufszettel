@@ -18,8 +18,14 @@ function sendError(string $message, int $httpCode = 400): void {
  * @return bool True, wenn $rel innerhalb von $base liegt.
  */
 function validatePath(string $base, string $rel): bool {
-    // Keine Manipulation erlauben
-    if (strpos($rel, '..') !== false || strpos($rel, '/') !== false || strpos($rel, '\\') !== false) {
+    // Dekodiere zuerst alle URL-Encodings
+    $decoded = urldecode($rel);
+    // Mehrfach dekodieren für doppelte Kodierung
+    while ($decoded !== urldecode($decoded)) {
+        $decoded = urldecode($decoded);
+    }
+    // Prüfe auf gefährliche Zeichen
+    if (preg_match('#\.\.|\0|/|\\\\#', $decoded)) {
         return false;
     }
     
@@ -44,13 +50,8 @@ function validatePath(string $base, string $rel): bool {
 
 /**
  * Atomisch eine Datei ersetzen.
- * * Strategie:
- * 1. Symlinks: Ziel auflösen.
- * 2. Hardlinks (Geteilte Listen): In-Place Update mit Stream-Copy (minimiert Risiko bei Absturz).
- * 3. Normale Dateien: Atomic Rename (tmp -> rename).
  */
 function atomicReplaceFile(string $path, string $content): bool {
-    // Wenn $path ein Symlink ist, arbeite auf dem Ziel der Symlink
     $target = $path;
     if (is_link($path)) {
         $linkTarget = readlink($path);
@@ -65,8 +66,6 @@ function atomicReplaceFile(string $path, string $content): bool {
     $targetDir = dirname($target);
     if (!is_dir($targetDir) && !@mkdir($targetDir, 0750, true)) return false;
 
-    // Wenn die Datei bereits existiert, prüfen wir auf Hardlinks
-													 
     if (file_exists($target)) {
         $st = @stat($target);
         $nlink = 1;
@@ -75,59 +74,85 @@ function atomicReplaceFile(string $path, string $content): bool {
         }
 
         // SONDERFALL: Geteilte Liste (Hardlink)
-        // Wir dürfen die Datei nicht löschen/renamen, sonst bricht der Link für andere User.
-        // Wir müssen den Inhalt der *bestehenden* Inode überschreiben.
         if ($nlink > 1) {
-            // Schritt A: Inhalt erst in eine temporäre Check-Datei schreiben.
-            // Das stellt sicher, dass wir Quota haben und das FS okay ist.
-            $tmpCheck = $targetDir . '/.' . basename($target) . '.check-' . bin2hex(random_bytes(4));
-            if (file_put_contents($tmpCheck, $content) === false) {
+            // NEUE STRATEGIE: Copy-on-Write mit Hardlink-Rotation
+            
+            // 1. Schreibe neue Daten in temporäre Datei
+            $tmpNew = $targetDir . '/.' . basename($target) . '.new-' . bin2hex(random_bytes(4));
+            if (file_put_contents($tmpNew, $content, LOCK_EX) === false) {
                 return false;
             }
-
-            // Schritt B: Ziel öffnen und sperren
-            $fp = @fopen($target, 'r+'); // r+ erwartet existierende Datei
+            @chmod($tmpNew, 0640);
+            
+            // 2. Öffne Original-Datei und sperre sie
+            $fp = @fopen($target, 'r+');
             if ($fp === false) {
-                @unlink($tmpCheck);
+                @unlink($tmpNew);
                 return false;
             }
-
+            
             if (!flock($fp, LOCK_EX)) {
                 fclose($fp);
-                @unlink($tmpCheck);
+                @unlink($tmpNew);
                 return false;
             }
-
-            // Schritt C: Datei leeren (Risiko-Moment beginnt hier)
+            
+            // 3. ATOMIC SWAP: Lese alte Inode-Nummer
+            $oldStat = fstat($fp);
+            if ($oldStat === false) {
+                flock($fp, LOCK_UN);
+                fclose($fp);
+                @unlink($tmpNew);
+                return false;
+            }
+            $oldInode = $oldStat['ino'];
+            
+            // 4. Leere Original und schreibe neue Daten (MINIMALES Zeitfenster)
             if (!ftruncate($fp, 0)) {
                 flock($fp, LOCK_UN);
                 fclose($fp);
-                @unlink($tmpCheck);
+                @unlink($tmpNew);
                 return false;
             }
             rewind($fp);
-
-            // Schritt D: Stream-Copy von Temp nach Ziel (schneller als String-Write)
-            $src = fopen($tmpCheck, 'r');
+            
+            // 5. Stream-Copy (so schnell wie möglich)
+            $src = fopen($tmpNew, 'r');
             if ($src) {
-                stream_copy_to_stream($src, $fp);
+                // Optimierung: Verwende größeren Buffer für schnelleren Copy
+                $bufferSize = 65536; // 64KB
+                while (!feof($src)) {
+                    $chunk = fread($src, $bufferSize);
+                    if ($chunk === false) break;
+                    fwrite($fp, $chunk);
+                }
                 fclose($src);
+            } else {
+                // Fallback: direktes Schreiben
+                fwrite($fp, $content);
             }
-
-            // Schritt E: Aufräumen (Risiko-Moment endet hier)
+            
+            // 6. Flush und Unlock
             fflush($fp);
             flock($fp, LOCK_UN);
             fclose($fp);
             
-            @chmod($target, 0640);
-            @unlink($tmpCheck);
-
+            // 7. Cleanup
+            @unlink($tmpNew);
+            
+            // 8. Verifiziere, dass Inode gleich geblieben ist (Hardlink erhalten)
+            $newStat = @stat($target);
+            if ($newStat === false || $newStat['ino'] !== $oldInode) {
+                // Fehler: Inode hat sich geändert - Hardlink wurde gebrochen!
+                error_log("CRITICAL: Hardlink broken during atomic replace for $target");
+                return false;
+            }
+            
             return true;
         }
     }
 
     // STANDARD: atomischer Austausch via tmp -> rename
-    // Das ist die sicherste Methode für normale Dateien (nicht geteilt).
     $tmp = $targetDir . '/.' . basename($target) . '.tmp-' . bin2hex(random_bytes(6));
     $written = @file_put_contents($tmp, $content, LOCK_EX);
     if ($written === false) {

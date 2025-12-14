@@ -72,7 +72,6 @@ $listNameOutput = htmlspecialchars(
 
 // --- Stylesheet-Versionierung ---
 $styleVersion  = file_exists(__DIR__ . '/links/style.css') ? date("Y-m-d_H-i-s", filemtime(__DIR__ . '/links/style.css')) : time();
-$styleVersion2 = file_exists(__DIR__ . '/links/pyro.css')  ? date("Y-m-d_H-i-s", filemtime(__DIR__ . '/links/pyro.css'))  : time();
 $scriptVersion = file_exists(__DIR__ . '/bin/frontend.js') ? date("Y-m-d_H-i-s", filemtime(__DIR__ . '/bin/frontend.js')) : time();
 
 // --- Dynamisches CSS für Speiseplan ---
@@ -122,6 +121,14 @@ if (file_exists($userDir . '/history.txt')) {
     $specialMenuItems .= ($specialMenuItems === '') ? '<hr>' : '';
     $specialMenuItems .= '<button id="menuShowSpeiseplan" class="menu-item speiseplan">Speiseplanverlauf</button>';
 }
+// CSP-Nonce für erlaubte inline-Scripts erzeugen
+try {
+    $cspNonce = base64_encode(random_bytes(16));
+} catch (Throwable $e) {
+    $cspNonce = base64_encode(openssl_random_pseudo_bytes(16));
+}
+
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$cspNonce}'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;");
 ?>
 <!DOCTYPE html>
 <html lang="de">
@@ -129,9 +136,8 @@ if (file_exists($userDir . '/history.txt')) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="manifest" href="links/website.manifest" crossorigin="use-credentials">
+    <link rel="manifest" href="links/website.manifest.php" crossorigin="use-credentials">
     <link rel="stylesheet" href="links/style.css?<?= $styleVersion ?>">
-    <link rel="stylesheet" href="links/pyro.css?<?= $styleVersion2 ?>">
     <link rel="icon" type="image/svg+xml" href="links/icon.svg" />
     <link rel="icon" href="/favicon.ico" sizes="32x32">
     <link rel="apple-touch-icon" href="links/apple-touch-icon.png">
@@ -146,7 +152,7 @@ if (file_exists($userDir . '/history.txt')) {
     </style>
 </head>
 
-<body>
+<body class="<?= isset($_COOKIE['mode']) ? (($_COOKIE['mode'] === 'dark') ? 'dark' : 'light') : '' ?>">
     <div class="container">
 
         <div id="firstRunBanner"></div>
@@ -197,6 +203,7 @@ if (file_exists($userDir . '/history.txt')) {
                     <button id="menuChangeUsername" class="menu-item username">Benutzername ändern</button>
                     <button id="menuChangePassword" class="menu-item password">Passwort ändern</button>
                     <button id="menuChangeEMail" class="menu-item email">E-Mail ändern</button>
+                    <button id="menuDarkMode" class="menu-item darkmode" aria-pressed="false">Design</button>
                     <?= $specialMenuItems ?>
                     <hr>
                     <button id="menuDataProtection" class="menu-item dataprodtection">Datenschutz</button>
@@ -385,7 +392,10 @@ if (file_exists($userDir . '/history.txt')) {
         <?php endif; ?>
 
     </div>
-    <script>
+    <script nonce="<?= htmlspecialchars($cspNonce, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">
+
+        // Theme initialisation and menu label are handled in bin/frontend.js
+
         const speiseplanName = <?= json_encode($speiseplanName) ?>;
         const csrfToken = <?= json_encode($_SESSION['csrf_token'] ?? '') ?>;
         const syncInterval = <?= $syncInterval ?> * 1000;
