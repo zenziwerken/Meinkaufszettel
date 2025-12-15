@@ -97,29 +97,20 @@ if ($isSpeiseplan) {
 }
 
 $userHeadingText = 'Meine Zettel';
-if (!empty($displayName)) {
-    $safeDisplay = htmlspecialchars($displayName, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-    if (preg_match('/[sxzß]$/i', $displayName)) {
-        $userHeadingText = $safeDisplay . "’ Zettel";
-    } else {
-        $userHeadingText = $safeDisplay . 's Zettel';
-    }
-} elseif (isset($username) && $username) {
-    $safeUser = htmlspecialchars($username, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-    if (preg_match('/[sxzß]$/i', $username)) {
-        $userHeadingText = $safeUser . "’ Zettel";
-    } else {
-        $userHeadingText = $safeUser . 's Zettel';
-    }
+if (!empty($displayName) || !empty($username)) {
+    $name = $displayName ?: $username;
+    $safe = htmlspecialchars($name, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $suffix = preg_match('/[sxzß]$/iu', $name) ? "’ Zettel" : 's Zettel';
+    $userHeadingText = $safe . $suffix;
 }
 
 $specialMenuItems = '';
 if ($isAdmin) {
-    $specialMenuItems = '<hr><button id="menuCreateInvite" class="menu-item invite">Einladungslink erstellen</button>';
+    $specialMenuItems = "<hr>\n<button id='menuCreateInvite' class='menu-item invite'>Einladungslink erstellen</button>";
 }
 if (file_exists($userDir . '/history.txt')) {
-    $specialMenuItems .= ($specialMenuItems === '') ? '<hr>' : '';
-    $specialMenuItems .= '<button id="menuShowSpeiseplan" class="menu-item speiseplan">Speiseplanverlauf</button>';
+    $specialMenuItems .= ($specialMenuItems === '') ? "\n<hr>\n" : "\n";
+    $specialMenuItems .= "<button id='menuShowSpeiseplan' class='menu-item speiseplan'>Speiseplanverlauf</button>\n";
 }
 // CSP-Nonce für erlaubte inline-Scripts erzeugen
 try {
@@ -139,7 +130,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
     <link rel="manifest" href="links/website.manifest.php" crossorigin="use-credentials">
     <link rel="stylesheet" href="links/style.css?<?= $styleVersion ?>">
     <link rel="icon" type="image/svg+xml" href="links/icon.svg" />
-    <link rel="icon" href="/favicon.ico" sizes="32x32">
+    <link rel="icon" href="favicon.ico" sizes="32x32">
     <link rel="apple-touch-icon" href="links/apple-touch-icon.png">
     <title>Meinkaufszettel</title>
     <?= $speiseplanCss ?>
@@ -190,7 +181,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
                         <input type="password" id="passCode" placeholder="Passwort" autocomplete="current-password">
                         <button id="loginBtn" class="btn" type="button">Anmelden</button>
                     </form>
-                    <div class="forgot-pwd"><a href="reset_request.php" id="forgotPasswordLink">Passwort vergessen?</a></div>
+                    <div class="forgot-pwd"><a href="reset.php" id="forgotPasswordLink">Passwort vergessen?</a></div>
                 </div>
             </div>
 
@@ -251,7 +242,6 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
                 <div class="help-inner" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
                     <button id="helpCloseBtn" class="modal-close" aria-label="Hilfe schließen">×</button>
                     <h2 id="helpTitle" class="modal-title">Kurzanleitung</h2>
-                    <ul>
                         <li><strong>Neuen Zettel</strong> erstellen: Gib einen Namen im Feld „Ich gehe zu ...“ ein und klicke auf „Hinzufügen“.</li>
                         <li>Zettel <strong>teilen</strong>: Klick auf das Teilen-Symbol <span class="shareBtn btn"></span> und ein Link wird in die Zwischenablage gelegt. Sende ihn an einen anderen Benutzer um den Zettel gemeinsam zu benutzen. Mehrere Personen können die Liste gleichzeitig bearbeiten. Änderungen werden live synchronisiert. <span class="syncIndicator active btn"></span></li>
                         <li>Zettel/Eintrag <strong>umbenennen</strong>: Klicke auf das Stift-Symbol <span class="editBtn btn"></span>.</li>
@@ -401,8 +391,12 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
         const syncInterval = <?= $syncInterval ?> * 1000;
         const inactivityTimeout = <?= $inactivityTimeout ?> * 60 * 1000;
         const username = <?= json_encode($username) ?>;
+        
         // optional: Invite-Token in der URL (für Registrierung verwendet)
         const inviteToken = new URLSearchParams(window.location.search).get('invite');
+
+        const metaTheme = document.querySelector('meta[name="theme-color"]');
+        metaTheme.setAttribute('content', getComputedStyle(document.documentElement).getPropertyValue('--theme-color').trim());
 
         // Prüfe First-Run-Status via Backend, um doppelten PHP-Code zu vermeiden.
         (function() {

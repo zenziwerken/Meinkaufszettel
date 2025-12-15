@@ -26,6 +26,16 @@ https://github.com/alan-eu/Alan-Sans/tree/main */
   src: url("./fonts/alan-sans-v1-latin-600.woff2") format("woff2");
 }
 
+html {
+  --theme-color: #ffffff;
+  --bg-color: #ffffff;
+}
+
+html[data-theme="dark"] {
+  --theme-color: #111111;
+  --bg-color: #000000;
+}
+
 *,
 input {
   font-family: "Alan Sans", Arial, sans-serif;
@@ -55,7 +65,12 @@ h1 {
   hyphens: auto;
   margin: 20px 0 15px;
   padding: 0 0 10px;
+}
 
+h2 {
+    padding: 0 0 10px;
+    margin: 0 0 15px;
+    border-bottom: 1px solid #aaa;
 }
 
 .container {
@@ -363,9 +378,10 @@ input[type="email"] {
 }
 
 .editInput {
-  padding: 2px 6px !important;
+  padding: 1px 6px !important;
   font-size: 1rem;
-  margin: 3px 3px 2px !important;
+  margin: 2px 0 2px !important;
+  max-height: 25px;
 }
 
 #inviteInput {
@@ -916,6 +932,7 @@ li.pending-active .undoBtn:hover {
   border-radius: 0;
   padding: 5px;
   margin: 0;
+  cursor: pointer;
 }
 
 #itemListSpeiseplan strong {
@@ -936,6 +953,11 @@ li.pending-active .undoBtn:hover {
 #itemListSpeiseplan li.weekend {
   background-color: #F3F3F3;
 }
+
+#itemListSpeiseplan li.speiseplan-marked {
+  background-color: #fff5b1;
+}
+
 
 /* Hilfe-Overlay */
 #helpTexts {
@@ -975,6 +997,7 @@ li.pending-active .undoBtn:hover {
   max-height: 80vh;
   overflow: auto;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  scrollbar-gutter: stable;
 }
 
 .help-close {
@@ -1213,6 +1236,10 @@ li.pending-active .undoBtn:hover {
 
 .dark .shareBtn {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23fffB' d='M22.09 10.19 15.8 3.9a2.17 2.17 0 0 0-1.55-.64c-1.21 0-2.2.98-2.2 2.19V7.2C5.87 7.77 1.6 11.72 1.6 16.89c0 .31.02.62.05.92.12 1.2 1.11 2.1 2.31 2.1.52 0 1.04-.18 1.45-.51 1.19-.95 3.59-2.58 6.61-3.05v1.73c0 .59.22 1.14.63 1.55.41.41.98.65 1.56.65s1.13-.23 1.55-.64l6.34-6.34a2.195 2.195 0 0 0 0-3.1Zm-8.4 3.86c-4.44 0-7.95 2.29-9.66 3.66-.07.06-.22.08-.24-.11-.02-.23-.03-.47-.03-.71 0-4.41 4.15-7.6 9.87-7.6h.57l.06-3.85 6.3 6.31v.02l-6.39 6.32v-4.02l-.48-.01Z'/%3E%3C/svg%3E");
+}
+
+.dark #itemListSpeiseplan li.speiseplan-marked {
+  background-color: #830000;
 }
 
 

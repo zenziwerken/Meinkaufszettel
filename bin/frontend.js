@@ -1098,7 +1098,7 @@ function moveToInactive(li) {
 
   const text = li.querySelector(".itemText").textContent.trim();
   // Entferne abschließendes '!' oder '?' wenn das Item inaktiv wird
-  const stripped = String(text).replace(/[!?]+$/, '').trim();
+  const stripped = String(text).replace(/([!?]+|\d+x)$/, '').trim();
 
   // UI: Zeige Rückgängig-Schaltfläche am aktiven Element und markiere als "pending"
   const undoBtn = document.createElement("button");
@@ -1738,7 +1738,6 @@ function fetchSpeiseplanHistory() {
               Array.from(containerEl.querySelectorAll('li')).forEach((el) => {
                 if ((el.dataset.speiseText || '').trim() === text) {
                   el.classList.add('speiseplan-marked');
-                  try { el.style.backgroundColor = '#fff5b1'; } catch (e) {}
                 }
               });
             }
