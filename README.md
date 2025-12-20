@@ -30,6 +30,7 @@ Eine schlanke, selbst-gehostete Web-App für gemeinsame Einkaufslisten und Notiz
 - **Touch-optimiert**: Perfekt bedienbar auf Smartphones
 - **Dark-Mode**: berücksichtigt Systemeinnstellung, oder frei wählbar
 - **Barrierearm**: Tastaturnavigation, ARIA-Labels, semantisches HTML
+- **Integrierte Listenlogik**: automatische Sortierung inaktiver Einträge
 
 ### Sicherheit & Datenschutz
 - **Einladungs-System**: Neue Konten nur via Invite-Token
@@ -37,6 +38,7 @@ Eine schlanke, selbst-gehostete Web-App für gemeinsame Einkaufslisten und Notiz
 - **Session-basiert**: Sichere Cookie-Authentifizierung
 - **DSGVO-konform**: Datenexport und Account-Löschung eingebaut
 - **Path-Traversal-Schutz**: Robuste Sicherheitsvalidierung
+- **Backup-System**: Benutzerdaten werden kompremiert, zeitlich zurückbehalten
 
 ## 📋 Voraussetzungen
 
@@ -203,7 +205,7 @@ GPL-3.0 license - siehe [LICENSE](LICENSE) Datei für Details.
 
 ---
 
-**Hinweis**: Diese App ist für den privaten/familiären Gebrauch optimiert. Für große Teams oder öffentliche Instanzen empfiehlt sich eine professionelle Datenbank-Lösung.
+**Hinweis**: Diese App ist für den privaten/familiären Gebrauch konzipiert. Für große Teams oder öffentliche Instanzen empfiehlt sich eine professionelle Datenbank-Lösung.
 
 ---
 
