@@ -349,7 +349,7 @@ function resetRateLimitsByAction(string $actionPrefix): int {
  * Bei Fehlern wird `sendError` aufgerufen (HTTP 500).
  */
 function ensureRequiredDirectories(): void {
-    global $dataDirBase, $invitesDir, $usersDir, $sharesDir, $resetsDir, $rateLimitDir, $tmpDir;
+    global $dataDirBase, $invitesDir, $usersDir, $sharesDir, $resetsDir, $rateLimitDir, $backupsDir, $tmpDir;
 
     if (!is_dir($dataDirBase) && !@mkdir($dataDirBase, 0750, true)) {
         sendError('Server-Fehler: Speicher-Basisverzeichnis nicht verfügbar.', 500);
@@ -386,6 +386,12 @@ function ensureRequiredDirectories(): void {
     }
     if (!is_writable($rateLimitDir)) {
         sendError('Ratelimit-Verzeichnis ist nicht beschreibbar.', 500);
+    }
+    if (!is_dir($backupsDir) && !@mkdir($backupsDir, 0750, true)){
+        sendError('Konnte Backup-Verzeichnis nicht anlegen.', 500);
+    }
+    if (!is_writable($backupsDir)) {
+        sendError('Backup-Verzeichnis ist nicht beschreibbar.', 500);
     }
     if (!is_dir($tmpDir) && !@mkdir($tmpDir, 0750, true)){
         sendError('Konnte temporäres Verzeichnis nicht anlegen.', 500);

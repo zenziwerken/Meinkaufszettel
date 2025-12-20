@@ -99,3 +99,144 @@ if (isset($rateLimitDir) && is_dir($rateLimitDir)) {
     }
 }
 
+
+// Erstelle ein  ZIP-Backup der Benutzerdaten im $backupsDir
+if (is_dir($usersDir)) {
+    if (!is_dir($backupsDir)) {
+        @mkdir($backupsDir, 0755, true);
+    }
+
+    if (class_exists('ZipArchive')) {
+        $date = date('Y-m-d');
+        $zipFile = rtrim($backupsDir, '/') . '/users_' . $date . '.zip';
+        $tmpZipFile = rtrim($backupsDir, '/') . '/users_' . $date . '_tmp.zip';
+
+        $zip = new ZipArchive();
+        if ($zip->open($tmpZipFile, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true) {
+            $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($usersDir, RecursiveDirectoryIterator::SKIP_DOTS));
+            foreach ($it as $file) {
+                $filePath = $file->getPathname();
+                if ($filePath === false) continue;
+                if ($file->isLink() || !$file->isFile()) {
+                    continue;
+                }
+                $relativePath = ltrim(
+                    str_replace($usersDir, '', $filePath),
+                    DIRECTORY_SEPARATOR
+                );
+
+                // Prüfe Dateigröße
+                if (filesize($filePath) > 100 * 1024 * 1024) { // 100MB
+                    error_log("Datei zu groß: " . $relativePath);
+                    continue;
+                }
+                $zip->addFile($filePath, $relativePath);
+            }
+            $zip->close();
+            if (!rename($tmpZipFile, $zipFile)) {
+                @unlink($tmpZipFile);
+            }
+        } else {
+            @unlink($tmpZipFile);
+        }
+        // Wende die Backup-Retention-Policy an
+        applyBackupRetention($backupsDir, 7, 4, 12);
+    }
+}
+
+/**
+ * Backup-Aufbewahrungsrichtlinie anwenden.
+ *
+ * @param string $backupDir Verzeichnis mit ZIP-Backup-Dateien
+ * @param int    $keepDaily Anzahl der täglich aufzubewahrenden Backups
+ * @param int    $keepWeekly Anzahl der wöchentlich aufzubewahrenden Backups
+ * @param int    $keepMonthly Anzahl der monatlich aufzubewahrenden Backups
+ */
+function applyBackupRetention(
+    string $backupDir,
+    int $keepDaily = 7,
+    int $keepWeekly = 4,
+    int $keepMonthly = 12
+): void {
+    $pattern = rtrim($backupDir, '/') . '/users_*.zip';
+    $files = glob($pattern);
+    if ($files === false || empty($files)) {
+        return;
+    }
+
+    $now = time();
+    $backups = [];
+
+    // Zeitstempel analysieren
+    foreach ($files as $file) {
+        if (preg_match('/users_(\d{4}-\d{2}-\d{2})\.zip$/',basename($file),$m)) {
+            $dt = DateTime::createFromFormat('Y-m-d', $m[1]);
+            if ($dt !== false) {
+                $backups[] = [
+                    'file' => $file,
+                    'ts'   => $dt->getTimestamp(),
+                ];
+            }
+        }
+    }
+
+    if (empty($backups)) {
+        return;
+    }
+
+    // Neueste zuerst sortieren
+    usort($backups, fn($a, $b) => $b['ts'] <=> $a['ts']);
+
+    $keep = [];
+
+    $dailyLimit   = $now - ($keepDaily   * 86400);
+    $weeklyLimit  = $now - (($keepDaily + $keepWeekly * 7) * 86400);
+    $monthlyLimit = (new DateTimeImmutable())->modify("-{$keepMonthly} months")->getTimestamp();
+
+    $daily = [];
+    $weekly = [];
+    $monthly = [];
+
+    foreach ($backups as $b) {
+        $ts = $b['ts'];
+
+        // DAILY
+        if ($ts >= $dailyLimit) {
+            $key = date('Y-m-d', $ts);
+            if (!isset($daily[$key])) {
+                $daily[$key] = $b['file'];
+                $keep[$b['file']] = true;
+            }
+            continue;
+        }
+
+        // WEEKLY (ISO week)
+        if ($ts >= $weeklyLimit) {
+            $key = date('o-W', $ts); // ISO year-week
+            if (!isset($weekly[$key])) {
+                $weekly[$key] = $b['file'];
+                $keep[$b['file']] = true;
+            }
+            continue;
+        }
+
+        // MONTHLY
+        if ($ts >= $monthlyLimit) {
+            $key = date('Y-m', $ts);
+            if (!isset($monthly[$key])) {
+                $monthly[$key] = $b['file'];
+                $keep[$b['file']] = true;
+            }
+            continue;
+        }
+    }
+
+    // Alles löschen, was nicht zum Behalten markiert ist
+    foreach ($backups as $b) {
+        if (!isset($keep[$b['file']])) {
+            if (is_file($b['file'])) {
+                unlink($b['file']);
+            }
+        }
+    }
+}

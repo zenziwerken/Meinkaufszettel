@@ -53,6 +53,9 @@ $resetsDir      = $dataDirBase . '/resets';
 // Verzeichnis für Ratelimiting-Daten
 $rateLimitDir   = $dataDirBase . '/ratelimit';
 
+// Verzeichnis für Backups  (automatische Sicherungen)
+$backupsDir     = $dataDirBase . '/backups';
+
 // Temporäres Verzeichnis für Zwischenspeicherungen
 $tmpDir         = $dataDirBase . '/tmp';
 

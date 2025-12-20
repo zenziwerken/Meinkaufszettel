@@ -732,7 +732,25 @@ function login() {
 // ==========================================================
 //  Element-Erzeugung (active / inactive)
 // ==========================================================
+function _findActiveLiByText(text) {
+  try {
+    const needle = String(text ?? '').trim();
+    if (!needle) return null;
+    const ul = document.getElementById('itemList');
+    if (!ul) return null;
+    const match = Array.from(ul.querySelectorAll('li .itemText')).find((el) => (el.textContent || '').trim() === needle);
+    return match ? match.closest('li') : null;
+  } catch (e) {
+    return null;
+  }
+}
+
 function createActiveItem(text) {
+  // Falls der Eintrag bereits aktiv existiert, kein Duplikat erzeugen.
+  // (Beim Neu-Rendern via loadList() ist die Liste zuvor geleert, daher greift das nicht.)
+  const existing = _findActiveLiByText(text);
+  if (existing) return existing;
+
   const li = document.createElement("li");
   // Erzeuge Elemente sicher (vermeide innerHTML mit nicht vertrauenswürdigen Inhalten)
   const dragHandle = document.createElement('span');
@@ -891,7 +909,7 @@ function setupItemSearch() {
         if (inactiveItems.includes(item)) {
           const li = inactiveLis.find((li) => li.querySelector(".itemText").textContent.trim() === item);
           if (li) {
-            moveToActive(li);
+            moveToActive(li, { position: 'top', reconcileWithBackend: true });
             input.value = "";
           }
         }
@@ -1122,7 +1140,12 @@ function moveToInactive(li) {
   );
 
   const newActiveItems = activeItems.filter((item) => item !== text);
-  const newInactiveItems = [...new Set([...inactiveItems, stripped])];
+  // Stelle sicher, dass ein bereits inaktiv vorhandener Eintrag nicht dupliziert wird.
+  // Dazu normalisieren wir alle Inaktiven mit der gleichen Strip-Logik.
+  const normalizedInactiveItems = inactiveItems
+    .map((item) => String(item || '').replace(/([!?]+|\d+x)$/, '').trim())
+    .filter(Boolean);
+  const newInactiveItems = [...new Set([...normalizedInactiveItems, stripped])];
 
   let filename = document.getElementById("filename")?.value.trim();
   if (!filename) filename = getFilenameFromUrl() || "liste";
@@ -1140,8 +1163,16 @@ function moveToInactive(li) {
       function () {
         // Beim Erfolg: aktives li entfernen (falls noch vorhanden) und inaktives Element anfügen
         if (li.parentElement) li.parentElement.removeChild(li);
-        const finalLi = createInactiveItem(stripped);
-        document.getElementById("inactiveList")?.appendChild(finalLi);
+        // UI-seitig ebenfalls keine Duplikate erzeugen, falls das Item bereits inaktiv existiert
+        const inactiveUl = document.getElementById("inactiveList");
+        if (inactiveUl) {
+          const alreadyInactive = Array.from(inactiveUl.querySelectorAll('li .itemText'))
+            .some((el) => (el.textContent || '').trim() === stripped);
+          if (!alreadyInactive) {
+            const finalLi = createInactiveItem(stripped);
+            inactiveUl.appendChild(finalLi);
+          }
+        }
         // Wenn keine aktiven Elemente mehr vorhanden sind, zeige das "Pyro"-Element
         try {
           const itemList = document.getElementById('itemList');
@@ -1196,9 +1227,12 @@ function moveToInactive(li) {
   });
 }
 
-function moveToActive(li) {
+function moveToActive(li, options) {
   if (!li) return;
   const text = li.querySelector(".itemText").textContent.trim();
+  const opts = options && typeof options === 'object' ? options : {};
+  const position = opts.position === 'top' ? 'top' : 'bottom';
+  const reconcileWithBackend = opts.reconcileWithBackend !== false;
   const activeItems = Array.from(document.querySelectorAll("#itemList li")).map((l) =>
     l.querySelector(".itemText").textContent.trim()
   );
@@ -1206,7 +1240,12 @@ function moveToActive(li) {
     l.querySelector(".itemText").textContent.trim()
   );
   const newInactiveItems = inactiveItems.filter((item) => item !== text);
-  const newActiveItems = [...activeItems, text];
+  const alreadyActive = activeItems.includes(text);
+  const baseActive = [...new Set(activeItems.filter(Boolean))];
+  // Wenn bereits aktiv: nicht duplizieren. Bei "top" ggf. nach oben ziehen.
+  const newActiveItems = alreadyActive
+    ? (position === 'top' ? [text, ...baseActive.filter((i) => i !== text)] : baseActive)
+    : (position === 'top' ? [text, ...baseActive] : [...baseActive, text]);
 
   let filename = document.getElementById("filename")?.value.trim();
   if (!filename) filename = getFilenameFromUrl() || "liste";
@@ -1217,9 +1256,16 @@ function moveToActive(li) {
     newInactiveItems,
     function () {
       const activeLi = createActiveItem(text);
-      document.getElementById("itemList")?.prepend(activeLi);
+      const ul = document.getElementById("itemList");
+      if (ul) {
+        if (position === 'top') ul.prepend(activeLi);
+        else ul.appendChild(activeLi);
+      }
       if (li.parentElement) li.parentElement.removeChild(li);
       sortInactiveList();
+      if (reconcileWithBackend) {
+        try { loadList(); } catch (e) {}
+      }
     },
     function (error) {
       showStatus(`Fehler: ${error}`, "error");
@@ -1939,9 +1985,22 @@ function addItem() {
     document.querySelectorAll("#inactiveList li")
   ).map((li) => li.querySelector(".itemText").textContent.trim());
 
+  // Verhindere doppelte aktive Einträge
+  if (activeItems.includes(text)) {
+    try {
+      const existing = _findActiveLiByText(text);
+      if (existing) {
+        existing.classList.add('flash');
+        existing.addEventListener('animationend', () => existing.classList.remove('flash'), { once: true });
+      }
+    } catch (e) {}
+    input.value = "";
+    return;
+  }
+
   saveListToServer(
     filename,
-    [...activeItems, text],
+    [text, ...activeItems],
     inactiveItems,
     () => {
       input.value = "";
@@ -2607,6 +2666,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Set button label according to effective mode
     const effective = cookieMode || (prefersDark ? 'dark' : 'light');
+    if (effective === 'dark') {
+      darkBtn.classList.add('dark');
+    } else {
+      darkBtn.classList.remove('dark');
+    }
     if (cookieMode) {
       darkBtn.textContent = (cookieMode === 'dark') ? 'Light Mode' : 'Dark Mode';
     } else {
