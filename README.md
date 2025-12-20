@@ -15,10 +15,10 @@ Eine schlanke, selbst-gehostete Web-App für gemeinsame Einkaufslisten und Notiz
 
 ### Listenverwaltung
 - Beliebig viele Listen für verschiedene Zwecke (Einkauf, To-Do, Projekte...)
-- Drag & Drop zum Sortieren der Einträge
+- Drag & Drop zum Sortieren der aktiven Einträge
 - Einträge mit `!` oder `?` für Prioritäten markieren
 - Such-Dropdown mit Live-Vorschlägen aus bestehenden Einträgen
-- Automatische alphabetische Sortierung erledigter Einträge
+- Automatisches Entfernen von Zahlenangaben bei inaktiven Einträgen
 
 ### Zusammenarbeit
 - **Geteilte Listen**: Sende einen Share-Link an andere Nutzer
