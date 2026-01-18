@@ -447,6 +447,11 @@ button:hover {
   color: #ffffff;
 }
 
+.warning {
+  background-color: #ff9800;
+  color: #ffffff;
+}
+
 .change {
   background-color: #34b723;
   color: #ffffff;

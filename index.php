@@ -132,6 +132,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
     <link rel="icon" type="image/svg+xml" href="links/icon.svg" />
     <link rel="icon" href="favicon.ico" sizes="32x32">
     <link rel="apple-touch-icon" href="links/apple-touch-icon.png">
+    <meta name="theme-color">
     <title>Meinkaufszettel</title>
     <?= $speiseplanCss ?>
     <style>
@@ -389,7 +390,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
         const speiseplanName = <?= json_encode($speiseplanName) ?>;
         const csrfToken = <?= json_encode($_SESSION['csrf_token'] ?? '') ?>;
         const syncInterval = <?= $syncInterval ?> * 1000;
-        const inactivityTimeout = <?= $inactivityTimeout ?> * 60 * 1000;
+        const inactivityTimeoutMs = <?= $inactivityTimeout ?> * 60 * 1000;
         const username = <?= json_encode($username) ?>;
         
         // optional: Invite-Token in der URL (für Registrierung verwendet)
@@ -397,6 +398,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
 
         const metaTheme = document.querySelector('meta[name="theme-color"]');
         metaTheme.setAttribute('content', getComputedStyle(document.documentElement).getPropertyValue('--theme-color').trim());
+        
 
         // Prüfe First-Run-Status via Backend, um doppelten PHP-Code zu vermeiden.
         (function() {

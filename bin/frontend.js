@@ -47,6 +47,9 @@ function showStatus(message, type) {
     if (type === 'change') {
       statusDiv._dismissTimer = setTimeout(clear, 5000);
     }
+    if (type === 'warning') {
+      statusDiv._dismissTimer = setTimeout(clear, 10000);
+    }
     if (type === 'error') {
       statusDiv._dismissTimer = setTimeout(clear, 10000);
     }
@@ -162,10 +165,274 @@ function postToBackend(payload, extraOptions) {
 }
 
 // ==========================================================
+//  Offline-/PWA-Unterstützung (lokaler Cache + Pending Saves)
+// ==========================================================
+
+const _pwaStoragePrefix = 'einkaufszettel:pwa:v1:';
+const _pwaKeys = {
+  overview: _pwaStoragePrefix + 'overview',
+  pendingSaves: _pwaStoragePrefix + 'pendingSaves',
+  lastNetworkState: _pwaStoragePrefix + 'lastNetworkState'
+};
+
+let _offlineInitDone = false;
+let _pendingSaveFlushRunning = false;
+
+function _lsGetJSON(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw);
+  } catch (e) {
+    return fallback;
+  }
+}
+
+function _lsSetJSON(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function _isProbablyNetworkError(err) {
+  try {
+    if (!err) return false;
+    // Fetch wirft bei Netzwerkproblemen häufig TypeError
+    if (err instanceof TypeError) return true;
+    const msg = String(err.message || err || '').toLowerCase();
+    return msg.includes('failed to fetch') || msg.includes('networkerror') || msg.includes('netzwerk') || msg.includes('load failed');
+  } catch (e) {
+    return false;
+  }
+}
+
+function _cacheListKey(filename) {
+  const f = String(filename || 'liste');
+  return _pwaStoragePrefix + 'list:' + encodeURIComponent(f);
+}
+
+function cacheListLocally(filename, payload, meta) {
+  try {
+    if (!payload || typeof payload !== 'object') return;
+    const active = Array.isArray(payload.active) ? payload.active : [];
+    const inactive = Array.isArray(payload.inactive) ? payload.inactive : [];
+    const obj = {
+      filename: String(filename || 'liste'),
+      cachedAt: Date.now(),
+      shared: !!payload.shared,
+      active: active.map((x) => String(x ?? '')),
+      inactive: inactive.map((x) => String(x ?? '')),
+      meta: meta && typeof meta === 'object' ? meta : undefined
+    };
+    _lsSetJSON(_cacheListKey(filename), obj);
+  } catch (e) {}
+}
+
+function getCachedListLocally(filename) {
+  try {
+    const obj = _lsGetJSON(_cacheListKey(filename), null);
+    if (!obj || typeof obj !== 'object') return null;
+    return obj;
+  } catch (e) {
+    return null;
+  }
+}
+
+function cacheOverviewLocally(listArray) {
+  try {
+    if (!Array.isArray(listArray)) return;
+    _lsSetJSON(_pwaKeys.overview, { cachedAt: Date.now(), lists: listArray });
+  } catch (e) {}
+}
+
+function getCachedOverviewLocally() {
+  try {
+    const obj = _lsGetJSON(_pwaKeys.overview, null);
+    if (!obj || !Array.isArray(obj.lists)) return null;
+    return obj;
+  } catch (e) {
+    return null;
+  }
+}
+
+function _getPendingSaves() {
+  const q = _lsGetJSON(_pwaKeys.pendingSaves, []);
+  return Array.isArray(q) ? q : [];
+}
+
+function _setPendingSaves(q) {
+  _lsSetJSON(_pwaKeys.pendingSaves, Array.isArray(q) ? q : []);
+}
+
+function queuePendingSave(filename, activeItems, inactiveItems) {
+  try {
+    const fname = String(filename || 'liste');
+    const entry = {
+      filename: fname,
+      active: Array.isArray(activeItems) ? activeItems.map((x) => String(x ?? '')) : [],
+      inactive: Array.isArray(inactiveItems) ? inactiveItems.map((x) => String(x ?? '')) : [],
+      queuedAt: Date.now()
+    };
+
+    const q = _getPendingSaves();
+    // Dedupe: pro Liste nur den neuesten Stand behalten
+    const without = q.filter((e) => e && e.filename !== fname);
+    without.push(entry);
+    _setPendingSaves(without);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function flushPendingSaves(reason) {
+  if (_pendingSaveFlushRunning) return;
+  if (!navigator.onLine) return;
+  const q = _getPendingSaves();
+  if (!q.length) return;
+
+  _pendingSaveFlushRunning = true;
+  try {
+    let remaining = q.slice();
+    let flushed = 0;
+
+    for (const entry of q) {
+      if (!entry || !entry.filename) {
+        remaining = remaining.filter((x) => x !== entry);
+        continue;
+      }
+
+      try {
+        const resp = await postToBackend({
+          action: 'save',
+          filename: entry.filename,
+          active: entry.active || [],
+          inactive: entry.inactive || [],
+          username: typeof username !== 'undefined' ? username : undefined,
+        });
+        let data = null;
+        try { data = await resp.json(); } catch (e) { data = null; }
+
+        if (!resp.ok || (data && data.success === false)) {
+          // Nicht weiter flushen – kann Auth/CSRF/Serverproblem sein
+          break;
+        }
+
+        remaining = remaining.filter((x) => !(x && x.filename === entry.filename && x.queuedAt === entry.queuedAt));
+        flushed++;
+      } catch (err) {
+        // Netzwerk wieder weg -> abbrechen
+        break;
+      }
+    }
+
+    _setPendingSaves(remaining);
+    if (flushed > 0) {
+      showStatus('Lokale Änderungen synchronisiert' + (reason ? ' (' + reason + ')' : ''), 'change');
+    }
+  } finally {
+    _pendingSaveFlushRunning = false;
+  }
+}
+
+function initOfflineUiAndPwa() {
+  if (_offlineInitDone) return;
+  _offlineInitDone = true;
+
+  // Initialer Status
+  try {
+    const last = _lsGetJSON(_pwaKeys.lastNetworkState, null);
+    const now = navigator.onLine ? 'online' : 'offline';
+    if (last && last.state && last.state !== now) {
+      // Zustand hat sich seit letztem Besuch geändert
+    }
+    _lsSetJSON(_pwaKeys.lastNetworkState, { state: now, at: Date.now() });
+  } catch (e) {}
+
+  try {
+    if (!navigator.onLine) {
+      showStatus('Kein Netzwerk – Änderungen werden lokal zwischengespeichert.', 'warning');
+      try { stopPeriodicSync(); } catch (e) {}
+      try { _setSyncIndicator(false); } catch (e) {}
+    } else {
+      // Direkt beim Start versuchen zu flushen
+      flushPendingSaves('Start');
+    }
+  } catch (e) {}
+
+  // Online/Offline Events
+  window.addEventListener('offline', () => {
+    try { _lsSetJSON(_pwaKeys.lastNetworkState, { state: 'offline', at: Date.now() }); } catch (e) {}
+    showStatus('Kein Netzwerk – Änderungen werden lokal zwischengespeichert.', 'warning');
+    try { stopPeriodicSync(); } catch (e) {}
+    try { _setSyncIndicator(false); } catch (e) {}
+  });
+
+  window.addEventListener('online', () => {
+    try { _lsSetJSON(_pwaKeys.lastNetworkState, { state: 'online', at: Date.now() }); } catch (e) {}
+    showStatus('Wieder online – synchronisiere lokale Änderungen…', 'change');
+    flushPendingSaves('Online');
+    // Falls eine geteilte Liste geöffnet ist: Sync wieder starten
+    try {
+      const current = document.getElementById('filename')?.value?.trim() || getFilenameFromUrl();
+      if (current && _currentListShared) startPeriodicSync(current);
+    } catch (e) {}
+  });
+
+  // Manifest: wenn die Seite bereits ein Manifest setzt (z.B. links/website.manifest.php), nicht überschreiben.
+  // Nur als Fallback hinzufügen, falls keines vorhanden ist.
+  try {
+    let link = document.querySelector('link[rel="manifest"]');
+    if (!link) {
+      link = document.createElement('link');
+      link.setAttribute('rel', 'manifest');
+      // Bestehende Struktur der App: Manifest liegt im Ordner links/
+      link.setAttribute('href', new URL('links/website.manifest.php', window.location.href).toString());
+      // Falls Server das Manifest mit Credentials erwartet, passt das zur index.php-Konfiguration
+      link.setAttribute('crossorigin', 'use-credentials');
+      document.head.appendChild(link);
+    }
+  } catch (e) {}
+
+  try {
+    let meta = document.querySelector('meta[name="theme-color"]');
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.setAttribute('name', 'theme-color');
+      document.head.appendChild(meta);
+    }
+    meta.setAttribute('content', '#ffffff');
+  } catch (e) {}
+
+  try {
+    if ('serviceWorker' in navigator) {
+      const swUrl = new URL('sw.js', window.location.href).toString();
+      navigator.serviceWorker.register(swUrl).catch((e) => {
+        console.warn('Service Worker Registrierung fehlgeschlagen:', e);
+      });
+    }
+  } catch (e) {}
+}
+
+// ==========================================================
 //  Server-Interaktionen (save/load/list)
 // ==========================================================
 
 function saveListToServer(filename, activeItems, inactiveItems, onSuccess, onError) {
+  // Immer lokal cachen, damit bei Offline/Fehlern ein Fallback existiert
+  try { cacheListLocally(filename, { active: activeItems, inactive: inactiveItems, shared: _currentListShared }, { source: 'save-call' }); } catch (e) {}
+
+  // Offline: lokal queue'n und als "Erfolg" behandeln (UI bleibt konsistent)
+  if (!navigator.onLine) {
+    queuePendingSave(filename, activeItems, inactiveItems);
+    showStatus('Kein Netzwerk – Änderungen lokal gespeichert.', 'warning');
+    onSuccess?.({ success: true, offline: true });
+    return;
+  }
+
   postToBackend({
     action: "save",
     filename,
@@ -173,12 +440,44 @@ function saveListToServer(filename, activeItems, inactiveItems, onSuccess, onErr
     inactive: inactiveItems,
     username: typeof username !== 'undefined' ? username : undefined,
   })
-    .then((response) => response.json())
-    .then((data) => {
-      if (data.success) onSuccess?.(data);
-      else onError?.(data.error || "Unbekannter Fehler");
+    .then(async (response) => {
+      let data = null;
+      try { data = await response.json(); } catch (e) { data = null; }
+      if (!response.ok) {
+        // Manche Umgebungen liefern bei Offline/Netzproblemen eine nicht-OK Response (z.B. 503/504)
+        // statt eines Fetch-Fehlers. Diese Fälle wie Offline behandeln (lokal queue'n).
+        const st = typeof response.status === 'number' ? response.status : 0;
+        const isTransient = (st === 0 || st === 408 || st === 502 || st === 503 || st === 504);
+        if (isTransient) {
+          queuePendingSave(filename, activeItems, inactiveItems);
+          showStatus('Kein Netzwerk – Änderungen lokal gespeichert.', 'warning');
+          return { success: true, offline: true, queued: true, status: st };
+        }
+        const msg = data && (data.error || data.message) ? (data.error || data.message) : ('Serverfehler: ' + response.status);
+        throw new Error(msg);
+      }
+      return data;
     })
-    .catch((error) => onError?.(error));
+    .then((data) => {
+      if (data && data.success) {
+        // Erfolgreich: ggf. Pending-Queue flushen
+        if (!data.offline) {
+          try { flushPendingSaves('Save'); } catch (e) {}
+        }
+        onSuccess?.(data);
+      } else {
+        onError?.((data && data.error) || "Unbekannter Fehler");
+      }
+    })
+    .catch((error) => {
+      if (_isProbablyNetworkError(error) || !navigator.onLine) {
+        queuePendingSave(filename, activeItems, inactiveItems);
+        showStatus('Kein Netzwerk – Änderungen lokal gespeichert.', 'warning');
+        onSuccess?.({ success: true, offline: true });
+        return;
+      }
+      onError?.(error && error.message ? error.message : error);
+    });
 }
 
 function fetchAllLists(onSuccess, onError) {
@@ -198,10 +497,56 @@ function fetchAllLists(onSuccess, onError) {
       return data;
     })
     .then((data) => {
-      if (Array.isArray(data)) onSuccess?.(data);
+      if (Array.isArray(data)) {
+        try { cacheOverviewLocally(data); } catch (e) {}
+        onSuccess?.(data);
+      }
       else onError?.(data && (data.error || data.message) ? (data.error || data.message) : "Antwortformat ungültig");
     })
-    .catch((error) => onError?.(error.message || error));
+    .catch((error) => {
+      if (_isProbablyNetworkError(error)) {
+        const cached = getCachedOverviewLocally();
+        if (cached && Array.isArray(cached.lists)) {
+          showStatus('Kein Netzwerk – zeige lokal gespeicherte Listenübersicht.', 'warning');
+          onSuccess?.(cached.lists);
+          return;
+        }
+        showStatus('Kein Netzwerk – keine lokal gespeicherte Listenübersicht vorhanden.', 'warning');
+      }
+      onError?.(error.message || error);
+    });
+}
+
+function _renderListPayloadToUi(filename, payload, options) {
+  const opts = options && typeof options === 'object' ? options : {};
+  const ulActive = document.getElementById("itemList");
+  const ulInactive = document.getElementById("inactiveList");
+  if (!ulActive || !ulInactive) return;
+
+  ulActive.innerHTML = "";
+  ulInactive.innerHTML = "";
+
+  _currentListShared = !!(payload && payload.shared);
+
+  if (Array.isArray(payload.active)) {
+    payload.active.forEach((item) => ulActive.appendChild(createActiveItem(item)));
+  }
+  if (Array.isArray(payload.inactive)) {
+    payload.inactive.forEach((item) => ulInactive.appendChild(createInactiveItem(item)));
+    sortInactiveList();
+  }
+
+  // Periodische Synchronisation: nur für geteilte Listen und nur wenn online
+  try {
+    if (_currentListShared && navigator.onLine && !opts.forceDisableSync) {
+      startPeriodicSync(filename);
+    } else {
+      stopPeriodicSync();
+      _setSyncIndicator(false);
+    }
+  } catch (e) {
+    console.warn('Konnte Periodic Sync nicht starten/stoppen:', e);
+  }
 }
 
 function loadList() {
@@ -255,30 +600,23 @@ function loadList() {
       }
 
       // Setze globalen Shared-Status (wird von startPeriodicSync genutzt)
-      _currentListShared = !!(payload && payload.shared);
-
-      if (Array.isArray(payload.active)) {
-        payload.active.forEach((item) => ulActive.appendChild(createActiveItem(item)));
-      }
-      if (Array.isArray(payload.inactive)) {
-        payload.inactive.forEach((item) => ulInactive.appendChild(createInactiveItem(item)));
-        sortInactiveList();
-      }
-
-      // Periodische Synchronisation: nur für geteilte Listen starten
-      try {
-        if (_currentListShared) {
-          startPeriodicSync(filename);
-        } else {
-          // Sicherstellen, dass kein Sync läuft für lokale/privat Listen
-          stopPeriodicSync();
-        }
-      } catch (e) {
-        console.warn("Konnte Periodic Sync nicht starten/stoppen:", e);
-      }
+      try { cacheListLocally(filename, payload, { source: 'load-ok' }); } catch (e) {}
+      _renderListPayloadToUi(filename, payload);
     })
     .catch((error) => {
-      showStatus("Fehler: " + error.message, "error");
+      if (_isProbablyNetworkError(error) || !navigator.onLine) {
+        const cached = getCachedListLocally(filename);
+        if (cached && (Array.isArray(cached.active) || Array.isArray(cached.inactive))) {
+          const payload = { active: cached.active || [], inactive: cached.inactive || [], shared: !!cached.shared };
+          _renderListPayloadToUi(filename, payload, { forceDisableSync: true });
+          showStatus('Kein Netzwerk – zeige zuletzt lokal gespeicherte Version.', 'warning');
+          return;
+        }
+        showStatus('Kein Netzwerk – keine lokale Version dieser Liste vorhanden.', 'warning');
+        return;
+      }
+
+      showStatus("Fehler: " + (error && error.message ? error.message : error), "error");
       console.error("Fehler beim Laden der Liste:", error);
     });
 }
@@ -574,6 +912,12 @@ function syncNow(filename) {
       } 
     })
     .catch((err) => {
+      if (_isProbablyNetworkError(err) || !navigator.onLine) {
+        showStatus('Kein Netzwerk – Sync pausiert.', 'warning');
+        try { stopPeriodicSync(); } catch (e) {}
+        try { _setSyncIndicator(false); } catch (e) {}
+        return;
+      }
       showStatus(`Server nicht erreichbar`, "error");
     })
     .finally(() => {
@@ -1232,7 +1576,8 @@ function moveToActive(li, options) {
   const text = li.querySelector(".itemText").textContent.trim();
   const opts = options && typeof options === 'object' ? options : {};
   const position = opts.position === 'top' ? 'top' : 'bottom';
-  const reconcileWithBackend = opts.reconcileWithBackend !== false;
+  // Offline macht ein reconcile (loadList) keinen Sinn und kann die UI sogar wieder überschreiben.
+  const reconcileWithBackend = (opts.reconcileWithBackend !== false) && !!navigator.onLine;
   const activeItems = Array.from(document.querySelectorAll("#itemList li")).map((l) =>
     l.querySelector(".itemText").textContent.trim()
   );
@@ -1250,24 +1595,52 @@ function moveToActive(li, options) {
   let filename = document.getElementById("filename")?.value.trim();
   if (!filename) filename = getFilenameFromUrl() || "liste";
 
+  // Optimistisches UI-Update: sofort sichtbar aktivieren (funktioniert auch offline)
+  const ul = document.getElementById("itemList");
+  const inactiveUl = document.getElementById("inactiveList");
+  const prevNextSibling = li.nextSibling;
+  const prevParent = li.parentElement;
+  const activeLi = createActiveItem(text);
+  let didInsertActive = false;
+  try {
+    if (ul && activeLi) {
+      // Falls createActiveItem ein bereits existierendes Element zurückgibt, nur repositionieren
+      if (position === 'top') ul.prepend(activeLi);
+      else ul.appendChild(activeLi);
+      didInsertActive = true;
+    }
+    if (li && li.parentElement) li.parentElement.removeChild(li);
+    try { sortInactiveList(); } catch (e) {}
+  } catch (e) {
+    // Wenn UI-Optimismus schiefgeht, fahren wir trotzdem mit Save fort
+  }
+
   saveListToServer(
     filename,
     newActiveItems,
     newInactiveItems,
-    function () {
-      const activeLi = createActiveItem(text);
-      const ul = document.getElementById("itemList");
-      if (ul) {
-        if (position === 'top') ul.prepend(activeLi);
-        else ul.appendChild(activeLi);
-      }
-      if (li.parentElement) li.parentElement.removeChild(li);
-      sortInactiveList();
-      if (reconcileWithBackend) {
+    function (data) {
+      // UI ist bereits optimistisch aktualisiert.
+      // Optional: online Abgleich vom Backend (nur wenn wirklich online und kein Offline-Ack)
+      const isOfflineAck = !!(data && data.offline);
+      if (reconcileWithBackend && navigator.onLine && !isOfflineAck) {
         try { loadList(); } catch (e) {}
       }
     },
     function (error) {
+      // Nicht-Netzwerkfehler: UI-Änderung revertieren
+      try {
+        if (didInsertActive && activeLi && activeLi.parentElement) {
+          activeLi.parentElement.removeChild(activeLi);
+        }
+        if (prevParent && li) {
+          if (prevNextSibling) prevParent.insertBefore(li, prevNextSibling);
+          else prevParent.appendChild(li);
+        } else if (inactiveUl && li) {
+          inactiveUl.appendChild(li);
+        }
+        try { sortInactiveList(); } catch (e) {}
+      } catch (e) {}
       showStatus(`Fehler: ${error}`, "error");
     }
   );
@@ -2056,6 +2429,9 @@ function addListItem() {
 //  Initialisierung bei DOMContentLoaded
 // ==========================================================
 document.addEventListener("DOMContentLoaded", function () {
+  // Offline-/PWA-Support initialisieren (Statusmeldungen, lokales Caching, SW/Manifest)
+  try { initOfflineUiAndPwa(); } catch (e) {}
+
   let urlFilename = getFilenameFromUrl();
   // Wenn die URL ein Share-Token enthält, darf die Key-Parsing-Funktion
   // nicht fälschlich 'share' als Listennamen zurückgeben. Unterdrücke
