@@ -145,7 +145,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
 </head>
 
 <body class="<?= isset($_COOKIE['mode']) ? (($_COOKIE['mode'] === 'dark') ? 'dark' : 'light') : '' ?>">
-    <div class="container">
+    <main class="container" id="main">
 
         <div id="firstRunBanner"></div>
 
@@ -382,7 +382,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
             </div>
         <?php endif; ?>
 
-    </div>
+    </main>
     <script nonce="<?= htmlspecialchars($cspNonce, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">
 
         // Theme initialisation and menu label are handled in bin/frontend.js

@@ -1116,13 +1116,26 @@ function createActiveItem(text) {
 
   li.appendChild(dragHandle);
   li.appendChild(spanText);
-  li.appendChild(editBtn);
   // Markiere Items, die mit '!' enden, weiterhin mit einer CSS-Klasse
+  let trimmed = '';
   try {
-    const trimmed = String(text || '').trim();
+    trimmed = String(text || '').trim();
     if (trimmed.endsWith('!')) li.classList.add('has-exclamation');
     if (trimmed.endsWith('?')) li.classList.add('has-question');
+    if (trimmed.startsWith('https://')) li.classList.add('has-link');
   } catch (e) { /* ignorieren */ }
+
+  // Füge Linksymbol hinzu, falls der Text mit https:// beginnt
+  if (trimmed.startsWith('https://')) {
+    const linkIcon = document.createElement('a');
+    linkIcon.href = trimmed;
+    linkIcon.target = '_blank';
+    linkIcon.className = 'linkIcon';
+    linkIcon.title = 'Link öffnen';
+    linkIcon.addEventListener('click', (e) => e.stopPropagation());
+    li.appendChild(linkIcon);
+  }
+  li.appendChild(editBtn);
 
   function updateDraggableState() {
     const itemList = document.getElementById("itemList");
@@ -1845,6 +1858,26 @@ function editItem(button) {
               else li.classList.remove('has-exclamation');
               if (nt.endsWith('?')) li.classList.add('has-question');
               else li.classList.remove('has-question');
+              if (nt.startsWith('https://')) li.classList.add('has-link');
+              else li.classList.remove('has-link');
+              // Verwalte Linksymbol
+              const existingIcon = li.querySelector('.linkIcon');
+              if (nt.startsWith('https://')) {
+                if (!existingIcon) {
+                  const linkIcon = document.createElement('a');
+                  linkIcon.href = nt;
+                  linkIcon.target = '_blank';
+                  linkIcon.className = 'linkIcon';
+                  linkIcon.title = 'Link öffnen';
+                  linkIcon.addEventListener('click', (e) => e.stopPropagation());
+                  const editBtn = li.querySelector('.editBtn');
+                  if (editBtn) li.insertBefore(linkIcon, editBtn);
+                } else {
+                  existingIcon.href = nt; // Update href, falls geändert
+                }
+              } else {
+                if (existingIcon) existingIcon.remove();
+              }
             } catch (e) { /* ignorieren */ }
           } catch (e) {
             span.textContent = newText;

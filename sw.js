@@ -3,7 +3,8 @@
  * - Navigation (HTML): Network-first, fallback cache
  * - Statische Assets (same-origin GET): Stale-while-revalidate
  */
-const CACHE_NAME = 'einkaufszettel-pwa-v1';
+const VERSION = '26';
+const CACHE_NAME = 'einkaufszettel-pwa-v' + VERSION;
 
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
@@ -12,11 +13,11 @@ self.addEventListener('install', (event) => {
     const urls = [
       base,
       base + 'index.php',
-      base + 'links/website.manifest.php',
-      base + 'links/style.css',
+      base + 'links/website.manifest.php?v=' + VERSION,
+      base + 'links/style.css?v=' + VERSION,
       base + 'links/icon.svg',
       base + 'links/apple-touch-icon.png',
-      base + 'bin/frontend.js'
+      base + 'bin/frontend.js?v=' + VERSION
     ];
     for (const u of urls) {
       try { await cache.add(u); } catch (e) { /* ignore */ }
@@ -42,7 +43,18 @@ self.addEventListener('activate', (event) => {
 async function networkFirst(request) {
   const cache = await caches.open(CACHE_NAME);
   try {
-    const resp = await fetch(request);
+    // Revalidierung erzwingen, damit Änderungen am Server (ETag/Last-Modified)
+    // zuverlässig erkannt werden.
+    const revalidateReq = new Request(request, { cache: 'no-cache' });
+    const resp = await fetch(revalidateReq);
+
+    // 304 hat keinen Body -> aus Cache bedienen.
+    if (resp && resp.status === 304) {
+      const cached304 = await cache.match(request, { ignoreSearch: true });
+      if (cached304) return cached304;
+      return resp;
+    }
+
     if (resp && resp.ok) {
       try { await cache.put(request, resp.clone()); } catch (e) {}
     }
@@ -63,7 +75,12 @@ async function staleWhileRevalidate(request) {
   const cached = await cache.match(request, { ignoreSearch: true });
   const fetchPromise = (async () => {
     try {
-      const resp = await fetch(request);
+      // Revalidierung erzwingen, damit geänderte Dateien vom Server geholt werden.
+      const revalidateReq = new Request(request, { cache: 'no-cache' });
+      const resp = await fetch(revalidateReq);
+
+      // 304 hat keinen Body -> vorhandenen Cache-Eintrag weiterverwenden.
+      if (resp && resp.status === 304) return cached;
       if (resp && resp.ok) {
         try { await cache.put(request, resp.clone()); } catch (e) {}
       }
