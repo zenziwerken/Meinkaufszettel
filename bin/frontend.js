@@ -168,7 +168,7 @@ function postToBackend(payload, extraOptions) {
 //  Offline-/PWA-Unterstützung (lokaler Cache + Pending Saves)
 // ==========================================================
 
-const _pwaStoragePrefix = 'einkaufszettel:pwa:v1:';
+const _pwaStoragePrefix = 'einkaufszettel:pwa:v2:';
 const _pwaKeys = {
   overview: _pwaStoragePrefix + 'overview',
   pendingSaves: _pwaStoragePrefix + 'pendingSaves',
@@ -1962,8 +1962,24 @@ function showServerLists(lists) {
     spanModified.textContent = modText;
     spanItemText.appendChild(spanModified);
 
+    const toolsPanelId = 'listToolsPanel-' + replaceSpacesWithUnderscores(String(list.filename || '').replace('.json', ''));
+
+    const toolsPanel = document.createElement('div');
+    toolsPanel.className = 'listToolsPanel';
+    toolsPanel.id = toolsPanelId;
+    toolsPanel.setAttribute('aria-hidden', 'true');
+
+    const toolsToggle = document.createElement('button');
+    toolsToggle.className = 'listToolsToggle';
+    toolsToggle.type = 'button';
+    toolsToggle.title = 'Werkzeuge anzeigen';
+    toolsToggle.setAttribute('aria-label', 'Werkzeugpanel öffnen');
+    toolsToggle.setAttribute('aria-expanded', 'false');
+    toolsToggle.setAttribute('aria-controls', toolsPanelId);
+
     const shareBtn = document.createElement('button');
     shareBtn.className = 'shareBtn';
+    shareBtn.type = 'button';
     if (list.shared) {
       shareBtn.classList.add('shared');
     }
@@ -1972,6 +1988,7 @@ function showServerLists(lists) {
 
     const editBtn = document.createElement('button');
     editBtn.className = 'editBtn';
+    editBtn.type = 'button';
     editBtn.title = 'Umbenennen';
     editBtn.addEventListener('click', function (e) {
       e.stopPropagation();
@@ -1980,12 +1997,15 @@ function showServerLists(lists) {
 
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'deleteBtn';
+    deleteBtn.type = 'button';
     deleteBtn.title = 'Liste löschen';
 
     li.appendChild(spanItemText);
-    li.appendChild(shareBtn);
-    li.appendChild(editBtn);
-    li.appendChild(deleteBtn);
+    toolsPanel.appendChild(shareBtn);
+    toolsPanel.appendChild(editBtn);
+    toolsPanel.appendChild(deleteBtn);
+    li.appendChild(toolsPanel);
+    li.appendChild(toolsToggle);
 
     // Teilen-Schaltfläche: Eventlistener ergänzen (verwende Closure für `list`)
     const shareBtnEl = li.querySelector(".shareBtn");
@@ -2011,6 +2031,18 @@ function showServerLists(lists) {
       openDeleteListModal(list.filename);
     });
 
+    toolsToggle.addEventListener('click', function (e) {
+      e.stopPropagation();
+      toggleListToolsPanel(li);
+    });
+
+    li.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && li.classList.contains('tools-open')) {
+        closeListToolsPanel(li);
+        toolsToggle.focus();
+      }
+    });
+
     if (typeof speiseplanName !== "undefined" && entryFilename == speiseplanName) {
       li.classList.add("speiseplan");
     }
@@ -2018,6 +2050,55 @@ function showServerLists(lists) {
     ul.appendChild(li);
   });
 }
+
+function closeAllListToolsPanels(exceptLi) {
+  document.querySelectorAll('#serverLists li.tools-open').forEach((li) => {
+    if (exceptLi && li === exceptLi) return;
+    closeListToolsPanel(li);
+  });
+}
+
+function closeListToolsPanel(li) {
+  if (!li) return;
+  li.classList.remove('tools-open');
+  const toggle = li.querySelector('.listToolsToggle');
+  const panel = li.querySelector('.listToolsPanel');
+  if (toggle) {
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.title = 'Werkzeuge anzeigen';
+    toggle.setAttribute('aria-label', 'Werkzeugpanel öffnen');
+  }
+  if (panel) panel.setAttribute('aria-hidden', 'true');
+}
+
+function openListToolsPanel(li) {
+  if (!li) return;
+  closeAllListToolsPanels(li);
+  li.classList.add('tools-open');
+  const toggle = li.querySelector('.listToolsToggle');
+  const panel = li.querySelector('.listToolsPanel');
+  if (toggle) {
+    toggle.setAttribute('aria-expanded', 'true');
+    toggle.title = 'Werkzeuge ausblenden';
+    toggle.setAttribute('aria-label', 'Werkzeugpanel schließen');
+  }
+  if (panel) panel.setAttribute('aria-hidden', 'false');
+}
+
+function toggleListToolsPanel(li) {
+  if (!li) return;
+  if (li.classList.contains('tools-open')) {
+    closeListToolsPanel(li);
+    return;
+  }
+  openListToolsPanel(li);
+}
+
+document.addEventListener('click', function (e) {
+  const insideOpenList = e.target && e.target.closest ? e.target.closest('#serverLists li.tools-open') : null;
+  if (insideOpenList) return;
+  closeAllListToolsPanels();
+});
 
   // Öffnet das Bestätigungs-Modal zum Löschen einer Liste
   function openDeleteListModal(filename) {
@@ -2234,7 +2315,7 @@ function closeSpeiseplanHistory() {
 }
 
 function editListItem(button) {
-  const li = button.parentElement;
+  const li = button.closest("li");
   const span = li.querySelector(".listFileName");
   const spanitemText = li.querySelector(".itemText");
   const oldText = span.textContent;
