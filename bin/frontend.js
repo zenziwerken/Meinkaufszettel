@@ -1,3 +1,5 @@
+// Last modified: 2026/04/28 16:03:01
+
 // ==========================================================
 //  Hilfsfunktionen & Konstanten
 // ==========================================================
@@ -1111,6 +1113,8 @@ function createActiveItem(text) {
   editBtn.title = 'Umbenennen';
   editBtn.addEventListener('click', function (e) {
     e.stopPropagation();
+    // Ignoriere click, wenn pointerdown gerade gespeichert hat
+    if (this._justSaved) return;
     try { editItem(this); } catch (err) { console.error(err); }
   });
 
@@ -1287,6 +1291,7 @@ function setupItemSearch() {
 //  Drag & Drop (Maus & Touch) + Hilfsfunktion getDragAfterElement
 // ==========================================================
 let draggedLi = null;
+let draggedListLi = null;
 
 function getDragAfterElement(container, y) {
   const draggableElements = [...container.querySelectorAll("li:not(.dragging)")];
@@ -1363,67 +1368,158 @@ function setupDragAndDrop() {
     });
   } else {
     // Touch-Bedienung
-    let touchStartY = 0;
+    let draggedLi = null;
     let isDragging = false;
-    let dragStartTimeout = null;
 
     itemList.addEventListener(
       "touchstart",
       (e) => {
-        const handle = e.target.closest(".dragHandle");
         const li = e.target.closest("li");
-        if (li && handle) {
-          e.preventDefault();
-          draggedLi = li;
-          touchStartY = e.touches[0].clientY;
-          dragStartTimeout = setTimeout(() => {
-            isDragging = true;
-            if (draggedLi) draggedLi.classList.add("dragging");
-          }, 100);
-        }
+        const handle = e.target.closest(".dragHandle");
+
+        if (!li || !handle) return;
+
+        draggedLi = li;
+        isDragging = true;
+        li.classList.add("dragging");
       },
-      { passive: false }
+      { passive: true }
     );
 
     itemList.addEventListener(
       "touchmove",
       (e) => {
-        if (!isDragging || !draggedLi) return;
+        if (!draggedLi || !isDragging) return;
+
         e.preventDefault();
+
         const touchY = e.touches[0].clientY;
-        if (Math.abs(touchY - touchStartY) < 10) return;
-        if (dragStartTimeout) {
-          clearTimeout(dragStartTimeout);
-          dragStartTimeout = null;
-        }
         const afterElement = getDragAfterElement(itemList, touchY);
-        if (afterElement == null) itemList.appendChild(draggedLi);
-        else itemList.insertBefore(draggedLi, afterElement);
+
+        // Nur verschieben wenn nötig → verhindert Flackern & Performance-Probleme
+        if (afterElement !== draggedLi.nextSibling) {
+          if (afterElement == null) {
+            itemList.appendChild(draggedLi);
+          } else {
+            itemList.insertBefore(draggedLi, afterElement);
+          }
+        }
       },
       { passive: false }
     );
 
-    itemList.addEventListener("touchend", (e) => {
-      if (dragStartTimeout) {
-        clearTimeout(dragStartTimeout);
-        dragStartTimeout = null;
-      }
-      if (draggedLi && isDragging) {
+    itemList.addEventListener("touchend", () => {
+      if (draggedLi) {
         draggedLi.classList.remove("dragging");
         updateActiveOrder();
       }
-      isDragging = false;
       draggedLi = null;
+      isDragging = false;
     });
 
-    itemList.addEventListener("touchcancel", (e) => {
-      if (dragStartTimeout) {
-        clearTimeout(dragStartTimeout);
-        dragStartTimeout = null;
+    itemList.addEventListener("touchcancel", () => {
+      if (draggedLi) {
+        draggedLi.classList.remove("dragging");
       }
-      if (draggedLi) draggedLi.classList.remove("dragging");
-      isDragging = false;
       draggedLi = null;
+      isDragging = false;
+    });
+  }
+}
+
+function setupListDragAndDrop() {
+  const listContainer = document.getElementById("serverLists");
+  if (!listContainer) return;
+  if (!touchscreen) {
+    
+    // Mausbedienung
+    listContainer.addEventListener("dragstart", (e) => {
+      const li = e.target.closest("li");
+      if (li && li.draggable) {
+        draggedListLi = li;
+        draggedListLi.classList.add("dragging");
+        try {
+          e.dataTransfer.setDragImage(li, li.offsetWidth / 2, li.offsetHeight / 2);
+        } catch (err) {
+          // einige Browser schränken setDragImage ein
+        }
+        setTimeout(() => (draggedListLi.style.display = "none"), 0);
+      } else {
+        e.preventDefault();
+      }
+    });
+
+    listContainer.addEventListener("dragend", () => {
+      if (draggedListLi) {
+        setTimeout(() => {
+          draggedListLi.style.display = "";
+          draggedListLi.classList.remove("dragging");
+          draggedListLi = null;
+        }, 0);
+        updateListOrder();
+      }
+    });
+
+    listContainer.addEventListener("dragover", (e) => {
+      if (!draggedListLi) return;
+      e.preventDefault();
+      Array.from(listContainer.children).forEach((el) => el.classList.remove("drop-target"));
+      const afterElement = getDragAfterElement(listContainer, e.clientY);
+      if (afterElement) afterElement.classList.add("drop-target");
+    });
+
+    listContainer.addEventListener("drop", (e) => {
+      if (!draggedListLi) return;
+      e.preventDefault();
+      const afterElement = getDragAfterElement(listContainer, e.clientY);
+      Array.from(listContainer.children).forEach((el) => el.classList.remove("drop-target"));
+      if (afterElement == null) listContainer.appendChild(draggedListLi);
+      else listContainer.insertBefore(draggedListLi, afterElement);
+      setTimeout(() => {
+        draggedListLi.style.display = "";
+        draggedListLi.classList.remove("dragging");
+        draggedListLi = null;
+      }, 0);
+      updateListOrder();
+    });
+  } else {
+      // Touch-Bedienung
+    let draggedListLi = null;
+    let isTouchDragging = false;
+
+    listContainer.addEventListener("touchstart", (e) => {
+      const li = e.target.closest("li");
+      if (!li || !li.draggable) return;
+
+      draggedListLi = li;
+      isTouchDragging = true;
+      li.classList.add("dragging");
+    }, { passive: true });
+
+    listContainer.addEventListener("touchmove", (e) => {
+      if (!draggedListLi || !isTouchDragging) return;
+
+      e.preventDefault();
+
+      const touchY = e.touches[0].clientY;
+      const afterElement = getDragAfterElement(listContainer, touchY);
+
+      if (afterElement !== draggedListLi.nextSibling) {
+        if (afterElement == null) {
+          listContainer.appendChild(draggedListLi);
+        } else {
+          listContainer.insertBefore(draggedListLi, afterElement);
+        }
+      }
+    }, { passive: false });
+
+    listContainer.addEventListener("touchend", () => {
+      if (draggedListLi) {
+        draggedListLi.classList.remove("dragging");
+        updateListOrder();
+      }
+      draggedListLi = null;
+      isTouchDragging = false;
     });
   }
 }
@@ -1449,6 +1545,82 @@ function updateActiveOrder() {
       showStatus("Fehler beim Speichern der Reihenfolge: " + error, "error");
     }
   );
+}
+
+// Speichert die neue Listen-Reihenfolge
+function updateListOrder() {
+  const serverLists = document.getElementById("serverLists");
+  if (!serverLists) return;
+  const newOrder = Array.from(serverLists.children).map((li) => {
+    const filename = li.dataset.filename;
+    return filename ? String(filename) : null;
+  }).filter(Boolean);
+  changeListOrder(newOrder);
+}
+
+// Speichert die neue Listen-Reihenfolge im Backend
+function changeListOrder(newOrder) {
+  postToBackend({
+    action: "change_list_order",
+    listOrder: newOrder,
+    username: typeof username !== 'undefined' ? username : undefined,
+  })
+    .then(async (response) => {
+      let data = null;
+      try {
+        data = await response.json();
+      } catch (e) {
+        data = null;
+      }
+      if (!response.ok) {
+        const msg = data && (data.error || data.message) ? (data.error || data.message) : `HTTP ${response.status}: ${response.statusText}`;
+        throw new Error(msg);
+      }
+      return data;
+    })
+    .then((data) => {
+      if (data && data.error) {
+        showStatus("Fehler beim Speichern der Listen-Reihenfolge: " + data.error, "error");
+      } else {
+        showStatus("Listen-Reihenfolge gespeichert", "success");
+      }
+    })
+    .catch((error) => {
+      showStatus("Fehler beim Speichern der Listen-Reihenfolge: " + (error && error.message ? error.message : error), "error");
+    });
+}
+
+// Toggle Reorder-Modus für Listen
+let isReorderMode = false;
+
+function toggleReorderMode() {
+  isReorderMode = !isReorderMode;
+  const serverLists = document.getElementById("serverLists");
+  if (!serverLists) return;
+
+  serverLists.querySelectorAll('li').forEach(li => {
+    li.draggable = isReorderMode;
+    if (isReorderMode) {
+      li.classList.add('reorder-mode');
+    } else {
+      li.classList.remove('reorder-mode');
+    }
+  });
+
+  // Aktualisiere alle reorderBtn Texte
+  document.querySelectorAll('.reorderBtn').forEach(btn => {
+    if(isReorderMode) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+
+  if (isReorderMode) {
+    showStatus('Ziehen Sie die Listen, um die Reihenfolge zu ändern.', 'change');
+  } else {
+    showStatus('Neu anordnen beendet.', 'change');
+  }
 }
 
 // ==========================================================
@@ -1757,87 +1929,85 @@ function editItem(button) {
   const li = button.parentElement;
   const span = li.querySelector(".itemText");
   const oldText = span.textContent;
+
+  // Wenn bereits im Editing → als Save interpretieren
+  if (button.classList.contains("editing")) {
+    const existingInput = li.querySelector(".editInput");
+    if (existingInput) saveInput(existingInput);
+    return;
+  }
+
   const input = document.createElement("input");
   input.type = "text";
   input.value = oldText;
   input.className = "editInput";
   input.style.flex = "1";
 
+  // Mobile-Optimierungen
+  input.style.fontSize = "16px"; // Verhindert iOS-Zoom
+  input.setAttribute("enterkeyhint", "done");
+
   button.classList.add("editing");
-  button.disabled = true;
+
   li.insertBefore(input, span);
   span.style.display = "none";
-  input.focus();
 
-  // Originaler Move-Handler (falls vorhanden) temporär entfernen
+  // Fokus mit kurzer Verzögerung für mobile Geräte
+  setTimeout(() => {
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  }, 50);
+
+  // Original-Handler temporär entfernen
   const originalMoveHandler = li._moveHandler;
-  if (originalMoveHandler) li.removeEventListener("click", originalMoveHandler);
+  if (originalMoveHandler) {
+    li.removeEventListener("click", originalMoveHandler);
+  }
 
-  const tempHandler = function (e) {
-    if (input.contains(e.target)) {
-      e.stopPropagation();
-      e.preventDefault();
-      return;
-    }
-    if (e.target.classList.contains("editBtn") || e.target.closest("button")) return;
-  };
-  li.addEventListener("click", tempHandler, { capture: true });
-
-  let blurTimer = null;
+  let isCleaningUp = false;
+  let isSaving = false;
 
   function cleanup() {
-    if (blurTimer) {
-      clearTimeout(blurTimer);
-      blurTimer = null;
-    }
+    if (isCleaningUp) return;
+    isCleaningUp = true;
+
+    // Blur-Listener ZUERST entfernen, bevor DOM-Änderungen blur auslösen
+    input.removeEventListener("blur", blurHandler);
+
     span.style.display = "";
     if (li.contains(input)) li.removeChild(input);
-    li.removeEventListener("click", tempHandler, { capture: true });
-    if (originalMoveHandler) li.addEventListener("click", originalMoveHandler);
-    // Auf Touch-Geräten kann die Schaltfläche nach Tap einen visuellen Hover-/Active-Zustand behalten.
-    // Ersetze die Schaltfläche durch einen geklonten Knoten, um diesen Zustand zuverlässig zu entfernen.
-    try {
-      if (touchscreen && button && button.parentElement) {
-        const newBtn = button.cloneNode(true);
-        // Stelle sicher, dass der Klick-Handler wieder angebracht wird (cloneNode kopiert keine Listener)
-        newBtn.addEventListener('click', function (e) {
-          e.stopPropagation();
-          try { editItem(this); } catch (err) { console.error(err); }
-        });
-        button.parentElement.replaceChild(newBtn, button);
-        // Entferne mögliche Klassennamen / Fokus von der neuen Schaltfläche
-        newBtn.classList.remove("editing");
-        newBtn.disabled = false;
-        newBtn.blur && newBtn.blur();
-        // kleiner Delay, damit mobile Browser den Active/Hover-Render aktualisieren
-        setTimeout(() => newBtn.blur && newBtn.blur(), 10);
-      } else {
-        button.disabled = false;
-        button.classList.remove("editing");
-        button.blur && button.blur();
-      }
-    } catch (e) {
-      // Falls etwas schiefgeht, wenigstens die ursprünglichen Einstellungen zurücksetzen
-      try { button.disabled = false; } catch (e) {}
-      try { button.classList.remove("editing"); } catch (e) {}
-      try { button.blur && button.blur(); } catch (e) {}
+
+    button.classList.remove("editing");
+
+    if (originalMoveHandler) {
+      li.addEventListener("click", originalMoveHandler);
     }
+
+    document.removeEventListener("pointerdown", outsideHandler, true);
+
+    // Button-Fokus entfernen
+    if (button.blur) button.blur();
   }
 
   function saveInput(el) {
-    if (!el || el._saving) return;
-    el._saving = true;
+    if (!el || isSaving || isCleaningUp) return;
+    isSaving = true;
 
     const newText = el.value.trim();
+
+    // UI SOFORT zurücksetzen
+    cleanup();
+
+    // Keine Änderung → kein Server-Call nötig
     if (!newText || newText === oldText) {
-      delete el._saving;
-      cleanup();
+      isSaving = false;
       return;
     }
 
     const activeItems = Array.from(document.querySelectorAll("#itemList li")).map((itemLi) =>
       itemLi === li ? newText : itemLi.querySelector(".itemText").textContent.trim()
     );
+
     const inactiveItems = Array.from(document.querySelectorAll("#inactiveList li")).map((l) =>
       l.querySelector(".itemText").textContent.trim()
     );
@@ -1850,65 +2020,119 @@ function editItem(button) {
       activeItems,
       inactiveItems,
       function () {
-          try {
-            const nt = String(newText || '').trim();
-            span.textContent = nt;
-            try {
-              if (nt.endsWith('!')) li.classList.add('has-exclamation');
-              else li.classList.remove('has-exclamation');
-              if (nt.endsWith('?')) li.classList.add('has-question');
-              else li.classList.remove('has-question');
-              if (nt.startsWith('https://')) li.classList.add('has-link');
-              else li.classList.remove('has-link');
-              // Verwalte Linksymbol
-              const existingIcon = li.querySelector('.linkIcon');
-              if (nt.startsWith('https://')) {
-                if (!existingIcon) {
-                  const linkIcon = document.createElement('a');
-                  linkIcon.href = nt;
-                  linkIcon.target = '_blank';
-                  linkIcon.className = 'linkIcon';
-                  linkIcon.title = 'Link öffnen';
-                  linkIcon.addEventListener('click', (e) => e.stopPropagation());
-                  const editBtn = li.querySelector('.editBtn');
-                  if (editBtn) li.insertBefore(linkIcon, editBtn);
-                } else {
-                  existingIcon.href = nt; // Update href, falls geändert
-                }
-              } else {
-                if (existingIcon) existingIcon.remove();
-              }
-            } catch (e) { /* ignorieren */ }
-          } catch (e) {
-            span.textContent = newText;
+        // Success - UI updaten
+        try {
+          const nt = String(newText).trim();
+          span.textContent = nt;
+
+          li.classList.toggle("has-exclamation", nt.endsWith("!"));
+          li.classList.toggle("has-question", nt.endsWith("?"));
+          li.classList.toggle("has-link", nt.startsWith("https://"));
+
+          const existingIcon = li.querySelector(".linkIcon");
+
+          if (nt.startsWith("https://")) {
+            if (!existingIcon) {
+              const linkIcon = document.createElement("a");
+              linkIcon.href = nt;
+              linkIcon.target = "_blank";
+              linkIcon.rel = "noopener noreferrer";
+              linkIcon.className = "linkIcon";
+              linkIcon.title = "Link öffnen";
+              linkIcon.addEventListener("click", (e) => e.stopPropagation());
+              linkIcon.addEventListener("touchend", (e) => {
+                e.stopPropagation();
+                window.open(nt, "_blank");
+              });
+
+              const editBtn = li.querySelector(".editBtn");
+              if (editBtn) li.insertBefore(linkIcon, editBtn);
+            } else {
+              existingIcon.href = nt;
+            }
+          } else {
+            if (existingIcon) existingIcon.remove();
           }
+
+          showStatus("Gespeichert", "success");
+        } catch (e) {
+          console.error("UI-Update-Fehler:", e);
+          span.textContent = newText; // Fallback
+        }
       },
       function (error) {
+        // Error - Text zurücksetzen
+        console.error("Server-Fehler:", error);
+        span.textContent = oldText;
         showStatus(`Fehler: ${error}`, "error");
       }
     );
 
+    // isSaving zurücksetzen (async)
     setTimeout(() => {
-      delete el._saving;
-      cleanup();
+      isSaving = false;
     }, 0);
   }
 
+  function cancelEdit() {
+    if (input.value !== oldText) {
+      input.value = oldText;
+    }
+    cleanup();
+  }
+
+  // ENTER / ESC
   input.addEventListener("keydown", function (e) {
     if (e.key === "Enter") {
       e.preventDefault();
       saveInput(input);
-    }
-    if (e.key === "Escape") {
-      cleanup();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      cancelEdit();
     }
   });
 
-  input.addEventListener("blur", function () {
-    blurTimer = setTimeout(function () {
-      saveInput(input);
-    }, 150);
-  });
+  // Blur als benannte Funktion – damit sie in cleanup() sauber entfernt werden kann
+  function blurHandler() {
+    if (input.value.trim() !== oldText) {
+      // Änderung vorgenommen → saveInput aufrufen
+      setTimeout(() => {
+        if (!isCleaningUp && !isSaving) {
+          saveInput(input);
+        }
+      }, 150);
+    } else {
+      // Keine Änderung → cleanup sofort aufrufen
+      cleanup();
+    }
+  }
+
+  input.addEventListener("blur", blurHandler);
+
+  // Pointer außerhalb → speichern
+  function outsideHandler(e) {
+    if (!li.contains(e.target) && document.body.contains(e.target)) {
+      if (!isCleaningUp && !isSaving) {
+        saveInput(input);
+      }
+    }
+  }
+
+  document.addEventListener("pointerdown", outsideHandler, true);
+
+  // Button im Editing-Zustand → Save
+  button.addEventListener("pointerdown", function onPointerDown(e) {
+    if (!button.classList.contains("editing")) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Flag setzen, um nachfolgenden click zu ignorieren
+    button._justSaved = true;
+    setTimeout(() => delete button._justSaved, 0);
+
+    saveInput(input);
+  }, { once: true });
 }
 
 // ==========================================================
@@ -1940,6 +2164,9 @@ function showServerLists(lists) {
     if (list.itemCount === 0) li.classList.add("empty");
 
     const entryFilename = replaceUnderscoresWithSpaces(list.filename.replace('.json', ''));
+
+    // Original-Dateiname als Datenattribut speichern, damit die Reihenfolge später unverändert an den Server geht.
+    li.dataset.filename = list.filename;
 
     // Erzeuge sicheren DOM-Baum statt innerHTML (vermeidet XSS)
     li.innerHTML = ''; // leeren
@@ -2000,10 +2227,16 @@ function showServerLists(lists) {
     deleteBtn.type = 'button';
     deleteBtn.title = 'Liste löschen';
 
+    const reorderBtn = document.createElement('button');
+    reorderBtn.className = 'reorderBtn';
+    reorderBtn.type = 'button';
+    reorderBtn.title = 'Listen sortieren';
+
     li.appendChild(spanItemText);
     toolsPanel.appendChild(shareBtn);
     toolsPanel.appendChild(editBtn);
     toolsPanel.appendChild(deleteBtn);
+    toolsPanel.appendChild(reorderBtn);
     li.appendChild(toolsPanel);
     li.appendChild(toolsToggle);
 
@@ -2031,6 +2264,12 @@ function showServerLists(lists) {
       openDeleteListModal(list.filename);
     });
 
+    // Schaltfläche zum Neu anordnen
+    li.querySelector(".reorderBtn").addEventListener("click", function (e) {
+      e.stopPropagation();
+      toggleReorderMode();
+    });
+
     toolsToggle.addEventListener('click', function (e) {
       e.stopPropagation();
       toggleListToolsPanel(li);
@@ -2043,12 +2282,23 @@ function showServerLists(lists) {
       }
     });
 
+    // Aktiviere Drag & Drop, wenn mehr als eine Liste vorhanden
+    if (lists.length > 1) {
+      li.draggable = false; // Standardmäßig nicht draggable, wird per Button aktiviert
+    }
+
     if (typeof speiseplanName !== "undefined" && entryFilename == speiseplanName) {
       li.classList.add("speiseplan");
     }
 
     ul.appendChild(li);
   });
+
+
+  // Setup Drag & Drop für Listen, wenn mehr als eine Liste
+  if (lists.length > 1) {
+    setupListDragAndDrop();
+  }
 }
 
 function closeAllListToolsPanels(exceptLi) {
@@ -2320,7 +2570,20 @@ function editListItem(button) {
   const spanitemText = li.querySelector(".itemText");
   const oldText = span.textContent;
 
+  if (button.classList.contains('editing')) {
+    const existingInput = li.querySelector('.editInput');
+    if (existingInput) {
+      finishEdit();
+    }
+    return;
+  }
+
   li.dataset.editing = "true";
+
+  // Clone the button to remove old click handlers
+  const newBtn = button.cloneNode(true);
+  button.parentElement.replaceChild(newBtn, button);
+  button = newBtn; // update reference
 
   const input = document.createElement("input");
   input.type = "text";
@@ -2339,6 +2602,7 @@ function editListItem(button) {
   function _buttonSaveHandler(e) {
     e.stopPropagation();
     if (!li.dataset.editing) return;
+    li._buttonClicked = true;
     try { finishEdit(); } catch (err) { console.error(err); }
   }
   button._saveHandler = _buttonSaveHandler;
@@ -2363,6 +2627,10 @@ function editListItem(button) {
 
   input.addEventListener("blur", function () {
     setTimeout(() => {
+      if (li._buttonClicked) {
+        delete li._buttonClicked;
+        return;
+      }
       if (
         li.dataset.editing &&
         (!li.contains(document.activeElement) || document.activeElement.tagName === "BUTTON")
@@ -2373,7 +2641,8 @@ function editListItem(button) {
   });
 
   function finishEdit() {
-    if (!li.dataset.editing) return;
+    if (!li.dataset.editing || li._finishing) return;
+    li._finishing = true;
     const newText = input.value.trim();
     if (newText && newText !== oldText) {
       const newFilename = replaceSpacesWithUnderscores(newText);
@@ -2411,6 +2680,8 @@ function editListItem(button) {
 
   function cleanup() {
     delete li.dataset.editing;
+    delete li._finishing;
+    delete li._buttonClicked;
     li.removeEventListener("click", tempHandler, { capture: true });
     if (input.parentElement === li) li.removeChild(input);
     spanitemText.style.display = "";

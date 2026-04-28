@@ -891,6 +891,7 @@ p.error {
   cursor: grab;
   display: flex;
   align-items: center;
+  justify-content: center;
   user-select: none;
   width: 28px;
   height: 32px;
@@ -898,6 +899,32 @@ p.error {
   background-position: center;
   background-repeat: no-repeat;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%230007'%3E%3Crect width='16' height='2' x='4' y='7' rx='1'/%3E%3Crect width='16' height='2' x='4' y='11' rx='1'/%3E%3Crect width='16' height='2' x='4' y='15' rx='1'/%3E%3C/svg%3E");
+}
+
+.reorderBtn {
+  background-size: 75%;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23fff'%3E%3Crect width='16' height='2' x='4' y='7' rx='1'/%3E%3Crect width='16' height='2' x='4' y='11' rx='1'/%3E%3Crect width='16' height='2' x='4' y='15' rx='1'/%3E%3C/svg%3E");
+  border: none;
+  background-color: #4c4c4c4b;
+  padding: 0;
+  width: 31px;
+  height: 28px;
+}
+
+.reorder-mode {  
+background-size: 25px !important;
+    background-position: 3px 6px !important;
+    padding-left: 30px !important;
+    background-repeat: no-repeat !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%230007'%3E%3Crect width='16' height='2' x='4' y='7' rx='1'/%3E%3Crect width='16' height='2' x='4' y='11' rx='1'/%3E%3Crect width='16' height='2' x='4' y='15' rx='1'/%3E%3C/svg%3E") !important;
+}
+
+.reorderBtn.active {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23FFF' d='M9 16.2L4.8 12l-1.4 1.4L9 19l12-12-1.4-1.4z'/%3E%3C/svg%3E");
+  background-color: #28a745;
+  transition: background-color 0.15s ease;
 }
 
 .drop-target {
@@ -1314,11 +1341,13 @@ li.pending-active .undoBtn:hover {
   border-left-color: #dc3545;
 }
 
-.dark .dragHandle {
+.dark .dragHandle,
+.dark .reorderBtn {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23fff6' %3E%3Crect width='16' height='2' x='4' y='7' rx='1'/%3E%3Crect width='16' height='2' x='4' y='11' rx='1'/%3E%3Crect width='16' height='2' x='4' y='15' rx='1'/%3E%3C/svg%3E");
 }
 
-.dark .speiseplan .dragHandle {
+.dark .speiseplan .dragHandle,
+.dark .speiseplan .reorderBtn {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%230008' %3E%3Crect width='16' height='2' x='4' y='7' rx='1'/%3E%3Crect width='16' height='2' x='4' y='11' rx='1'/%3E%3Crect width='16' height='2' x='4' y='15' rx='1'/%3E%3C/svg%3E");
 }
 
