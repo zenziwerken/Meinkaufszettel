@@ -15,7 +15,7 @@ Eine schlanke, selbst-gehostete Web-App für gemeinsame Einkaufslisten und Notiz
 
 ### Listenverwaltung
 - Beliebig viele Listen für verschiedene Zwecke (Einkauf, To-Do, Projekte...)
-- Drag & Drop zum Sortieren der aktiven Einträge
+- Drag & Drop zum Sortieren
 - Einträge mit `!` oder `?` für Prioritäten markieren
 - Such-Dropdown mit Live-Vorschlägen aus bestehenden Einträgen
 - Automatisches Entfernen von Zahlenangaben bei inaktiven Einträgen
@@ -171,6 +171,7 @@ Erstelle einen Cronjob für `data/cron.php`:
 - **Neue Liste**: "Ich gehe zu ..." → "Hinzufügen"
 - **Liste teilen**: 📤-Symbol → Link wird kopiert
 - **Liste umbenennen**: ✏️-Symbol neben dem Namen
+- **Liste sortieren**: Drag & Drop mit dem ☰-Symbol aktivieren 
 - **Liste löschen**: 🗑️-Symbol (mit Bestätigung)
 
 ### Einträge verwalten
