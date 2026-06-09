@@ -1,4 +1,4 @@
-// Last modified: 2026/04/28 16:03:01
+// Last modified: 2026/06/09 21:52:58
 
 // ==========================================================
 //  Hilfsfunktionen & Konstanten
@@ -1163,10 +1163,13 @@ function createActiveItem(text) {
     li._observer = observer;
   }
 
-  li.addEventListener("click", function (e) {
+  // Speichere den moveToInactive Handler, damit er später in editItem entfernt/hinzugefügt werden kann
+  li._moveHandler = function (e) {
     if (e.target.classList.contains("editBtn") || e.target.closest("button")) return;
     moveToInactive(li);
-  });
+  };
+
+  li.addEventListener("click", li._moveHandler);
 
   // optional: markiere speiseplan
   if (typeof speiseplanName !== "undefined" && getFilenameFromUrl() === speiseplanName) {

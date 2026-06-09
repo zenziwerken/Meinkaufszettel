@@ -3,7 +3,7 @@
  * - Navigation (HTML): Network-first, fallback cache
  * - Statische Assets (same-origin GET): Stale-while-revalidate
  */
-const VERSION = '34';
+const VERSION = '35';
 const CACHE_NAME = 'einkaufszettel-pwa-v' + VERSION;
 
 self.addEventListener('install', (event) => {

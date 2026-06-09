@@ -731,7 +731,7 @@ if ($action === 'list') {
             $isShared = true;
         }
         $list[] = [
-            'filename' => $filename,
+            'filename' => $filename . '.json', // Speichere mit .json für Sortierung
             'itemCount' => $itemCount,
             'lastModified' => filemtime($file),
             'shared' => $isShared
@@ -739,7 +739,80 @@ if ($action === 'list') {
         
     }
 
-    echo json_encode($list);
+    // Lade listOrder aus .settings
+    $settingsFile = $userDir . '/.settings';
+    $listOrder = [];
+    if (file_exists($settingsFile)) {
+        $content = @file_get_contents($settingsFile);
+        if ($content !== false) {
+            $settings = json_decode($content, true) ?: [];
+            $listOrder = $settings['listOrder'] ?? [];
+        }
+    }
+
+    // Normalisiere listOrder für den Vergleich (mit und ohne .json)
+    $listOrderNormalized = [];
+    foreach ($listOrder as $orderItem) {
+        if (!is_string($orderItem)) continue;
+        $normalized = trim($orderItem);
+        $normalized = preg_replace('/\.json$/i', '', $normalized);
+        if ($normalized !== '') {
+            $listOrderNormalized[] = $normalized;
+        }
+    }
+
+    // Sortiere $list basierend auf listOrder
+    $orderedList = [];
+    $remainingList = [];
+    foreach ($list as $item) {
+        $itemName = basename($item['filename'], '.json');
+        $index = array_search($itemName, $listOrderNormalized, true);
+        if ($index !== false) {
+            $orderedList[$index] = $item;
+        } else {
+            $remainingList[] = $item;
+        }
+    }
+    ksort($orderedList); // Sortiere nach Index
+    $sortedList = array_merge($orderedList, $remainingList);
+
+    // Entferne .json aus filename für Ausgabe
+    foreach ($sortedList as &$item) {
+        $item['filename'] = str_replace('.json', '', $item['filename']);
+    }
+
+    echo json_encode($sortedList);
+    exit;
+}
+
+if ($action === 'change_list_order') {
+    $listOrder = $data['listOrder'] ?? null;
+    if (!is_array($listOrder)) sendError('listOrder muss ein Array sein.', 400);
+    $normalizedOrder = [];
+    foreach ($listOrder as $filename) {
+        if (!is_string($filename)) sendError('Ungültiger Filename in listOrder.', 400);
+        $normalized = trim($filename);
+        $normalized = preg_replace('/\.json$/i', '', $normalized);
+        if ($normalized === '' || !preg_match($filenameMatch, $normalized)) sendError('Ungültiger Filename in listOrder.', 400);
+        $normalizedOrder[] = $normalized;
+    }
+
+    if ($userDir === null) sendError('Kein Benutzer angegeben.', 400);
+    $settingsFile = $userDir . '/.settings';
+    $settings = [];
+    if (file_exists($settingsFile)) {
+        $settingsContent = @file_get_contents($settingsFile);
+        if ($settingsContent !== false) {
+            $settings = json_decode($settingsContent, true);
+            if (!is_array($settings)) $settings = [];
+        }
+    }
+    $settings['listOrder'] = $normalizedOrder;
+    $payload = json_encode($settings, JSON_UNESCAPED_UNICODE);
+    if ($payload === false) sendError('Server-Fehler beim JSON-Encoding.', 500);
+    if (!atomicReplaceFile($settingsFile, $payload)) sendError('Konnte listOrder nicht speichern.', 500);
+    @chmod($settingsFile, 0640);
+    echo json_encode(['success' => true, 'message' => 'Listen-Reihenfolge gespeichert']);
     exit;
 }
 
