@@ -1039,6 +1039,159 @@ if ($action === 'sync') {
     exit;
 }
 
+if ($action === 'relocate_item') {
+    $sourceList = isset($data['sourceList']) ? trim((string)$data['sourceList']) : (isset($data['fromList']) ? trim((string)$data['fromList']) : '');
+    $targetList = isset($data['targetList']) ? trim((string)$data['targetList']) : (isset($data['toList']) ? trim((string)$data['toList']) : '');
+    $sourceStatus = isset($data['sourceStatus']) ? strtolower(trim((string)$data['sourceStatus'])) : (isset($data['fromStatus']) ? strtolower(trim((string)$data['fromStatus'])) : '');
+    $targetStatus = isset($data['targetStatus']) ? strtolower(trim((string)$data['targetStatus'])) : (isset($data['toStatus']) ? strtolower(trim((string)$data['toStatus'])) : 'active');
+    $itemValue = $data['item'] ?? $data['text'] ?? $data['value'] ?? null;
+
+    if ($sourceList === '' || $targetList === '') sendError('Quell- oder Ziel-Liste fehlt.', 400);
+    if (!preg_match($filenameMatch, $sourceList) || !preg_match($filenameMatch, $targetList)) sendError('Ungültiger Listenname.', 400);
+    if ($itemValue === null || $itemValue === '') sendError('Eintrag fehlt.', 400);
+    if (!is_string($itemValue) && !is_numeric($itemValue)) sendError('Eintrag muss eine Zeichenkette sein.', 400);
+
+    $item = (string)$itemValue;
+    if (mb_strlen($item) > $maxItemLength) sendError('Eintrag ist zu lang.', 400);
+    if (!in_array($targetStatus, ['active', 'inactive'], true)) sendError('Ziel-Status muss active oder inactive sein.', 400);
+    if ($userDir === null) sendError('Kein Benutzer angegeben.', 400);
+
+    $sourceRel = basename($sourceList) . '.json';
+    $targetRel = basename($targetList) . '.json';
+    if (!validatePath($userDir, $sourceRel)) sendError('Ungültiger Quellpfad.', 400);
+    if (!validatePath($userDir, $targetRel)) sendError('Ungültiger Zielpfad.', 400);
+
+    $sourcePath = $userDir . '/' . $sourceRel;
+    $targetPath = $userDir . '/' . $targetRel;
+    if (!file_exists($sourcePath)) sendError('Quell-Liste nicht gefunden.', 404);
+    if (!file_exists($targetPath)) sendError('Ziel-Liste nicht gefunden.', 404);
+
+    $readSource = @file_get_contents($sourcePath);
+    if ($readSource === false) sendError('Fehler beim Lesen der Quell-Liste.', 500);
+    $sourceData = json_decode($readSource, true);
+    if (!is_array($sourceData)) sendError('Quell-Liste enthält ungültige JSON-Daten.', 500);
+
+    $sourceActive = isset($sourceData['active']) && is_array($sourceData['active']) ? array_values($sourceData['active']) : [];
+    $sourceInactive = isset($sourceData['inactive']) && is_array($sourceData['inactive']) ? array_values($sourceData['inactive']) : [];
+
+    if ($sourceStatus === '') {
+        if (in_array($item, $sourceActive, true)) {
+            $sourceStatus = 'active';
+        } elseif (in_array($item, $sourceInactive, true)) {
+            $sourceStatus = 'inactive';
+        } else {
+            sendError('Eintrag wurde in der Quell-Liste nicht gefunden.', 404);
+        }
+    }
+
+    if (!in_array($sourceStatus, ['active', 'inactive'], true)) {
+        sendError('Quell-Status muss active oder inactive sein.', 400);
+    }
+
+    $removeItem = function (array $items) use ($item) {
+        return array_values(array_filter($items, static function ($entry) use ($item) {
+            return (string)$entry !== $item;
+        }));
+    };
+
+    if ($sourceStatus === 'active') {
+        $sourceActive = $removeItem($sourceActive);
+    } else {
+        $sourceInactive = $removeItem($sourceInactive);
+    }
+
+    $writeSource = false;
+    if ($sourcePath === $targetPath) {
+        if ($sourceStatus === $targetStatus) {
+            echo json_encode([
+                'success' => true,
+                'message' => 'Eintrag ist bereits in der Zielposition.',
+                'sourceList' => $sourceList,
+                'targetList' => $targetList,
+                'item' => $item,
+                'sourceStatus' => $sourceStatus,
+                'targetStatus' => $targetStatus,
+            ]);
+            exit;
+        }
+
+        if ($targetStatus === 'active') {
+            $sourceActive[] = $item;
+            $sourceActive = array_values(array_unique($sourceActive, SORT_STRING));
+        } else {
+            $sourceInactive[] = $item;
+            $sourceInactive = array_values(array_unique($sourceInactive, SORT_STRING));
+        }
+
+        $sourceData['active'] = $sourceActive;
+        $sourceData['inactive'] = $sourceInactive;
+        $sourceData['username'] = $reqUsername;
+
+        $jsonContent = json_encode($sourceData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        if ($jsonContent === false) sendError('Server-Fehler beim JSON-Encoding.', 500);
+        if (!atomicReplaceFile($sourcePath, $jsonContent)) sendError('Konnte Liste nicht aktualisieren.', 500);
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Eintrag innerhalb der Liste verschoben.',
+            'sourceList' => $sourceList,
+            'targetList' => $targetList,
+            'item' => $item,
+            'sourceStatus' => $sourceStatus,
+            'targetStatus' => $targetStatus,
+            'active' => $sourceActive,
+            'inactive' => $sourceInactive,
+        ]);
+        exit;
+    }
+
+    $readTarget = @file_get_contents($targetPath);
+    if ($readTarget === false) sendError('Fehler beim Lesen der Ziel-Liste.', 500);
+    $targetData = json_decode($readTarget, true);
+    if (!is_array($targetData)) sendError('Ziel-Liste enthält ungültige JSON-Daten.', 500);
+
+    $targetActive = isset($targetData['active']) && is_array($targetData['active']) ? array_values($targetData['active']) : [];
+    $targetInactive = isset($targetData['inactive']) && is_array($targetData['inactive']) ? array_values($targetData['inactive']) : [];
+
+    if ($targetStatus === 'active') {
+        $targetActive[] = $item;
+        $targetActive = array_values(array_unique($targetActive, SORT_STRING));
+    } else {
+        $targetInactive[] = $item;
+        $targetInactive = array_values(array_unique($targetInactive, SORT_STRING));
+    }
+
+    $sourceData['active'] = $sourceActive;
+    $sourceData['inactive'] = $sourceInactive;
+    $sourceData['username'] = $reqUsername;
+
+    $targetData['active'] = $targetActive;
+    $targetData['inactive'] = $targetInactive;
+    $targetData['username'] = $reqUsername;
+
+    $sourceJson = json_encode($sourceData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    $targetJson = json_encode($targetData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    if ($sourceJson === false || $targetJson === false) sendError('Server-Fehler beim JSON-Encoding.', 500);
+
+    if (!atomicReplaceFile($sourcePath, $sourceJson)) sendError('Konnte Quell-Liste nicht aktualisieren.', 500);
+    if (!atomicReplaceFile($targetPath, $targetJson)) sendError('Konnte Ziel-Liste nicht aktualisieren.', 500);
+
+    echo json_encode([
+        'success' => true,
+        'message' => 'Eintrag verschoben.',
+        'sourceList' => $sourceList,
+        'targetList' => $targetList,
+        'item' => $item,
+        'sourceStatus' => $sourceStatus,
+        'targetStatus' => $targetStatus,
+        'sourceActive' => $sourceActive,
+        'sourceInactive' => $sourceInactive,
+        'targetActive' => $targetActive,
+        'targetInactive' => $targetInactive,
+    ]);
+    exit;
+}
+
 if ($action === 'download') {
     // Zwei-Phasen-Ansatz:
     // POST: Erzeuge ein ZIP-Archiv des Benutzerverzeichnisses und gib ein Token zurück.

@@ -67,6 +67,30 @@ h1 {
   padding: 0 0 10px;
 }
 
+#listName.relocate-drop-active {
+  font-size: 0;
+  padding: 0;
+  position: relative;
+  margin-bottom: 12px;
+}
+
+#listName.relocate-drop-active::after {
+  content: "Eintrag verschieben";
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 12px 2px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+  z-index: 1200;
+  font-size: 1.1rem;
+  font-weight: 400;
+  line-height: 1.35;
+  text-align: center;
+}
+
 h2 {
     padding: 0 0 10px;
     margin: 0 0 15px;
@@ -1306,6 +1330,12 @@ li.pending-active .undoBtn:hover {
 .dark #itemList li.has-question {
   background-color: #35383c;
   border-color: #536141;
+}
+
+.dark #listName.relocate-drop-active::after {
+  border-color: #7bc47f;
+  background: #203b27;
+  color: #e4f5e5;
 }
 
 .dark #inactiveList li {

@@ -3,8 +3,16 @@
  * - Navigation (HTML): Network-first, fallback cache
  * - Statische Assets (same-origin GET): Stale-while-revalidate
  */
-const VERSION = '35';
+const VERSION = '51';
 const CACHE_NAME = 'einkaufszettel-pwa-v' + VERSION;
+const FRONTEND_SCRIPTS = [
+  'frontend-general.js',
+  'frontend-offline.js',
+  'frontend-lists.js',
+  'frontend-auth.js',
+  'frontend-items.js',
+  'frontend-main.js'
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
@@ -16,9 +24,11 @@ self.addEventListener('install', (event) => {
       base + 'links/website.manifest.php?v=' + VERSION,
       base + 'links/style.css?v=' + VERSION,
       base + 'links/icon.svg',
-      base + 'links/apple-touch-icon.png',
-      base + 'bin/frontend.js?v=' + VERSION
+      base + 'links/apple-touch-icon.png'
     ];
+    for (const script of FRONTEND_SCRIPTS) {
+      urls.push(base + 'bin/' + script + '?v=' + VERSION);
+    }
     for (const u of urls) {
       try { await cache.add(u); } catch (e) { /* ignore */ }
     }

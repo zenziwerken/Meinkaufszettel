@@ -70,9 +70,30 @@ $listNameOutput = htmlspecialchars(
     'UTF-8'
 );
 
-// --- Stylesheet-Versionierung ---
-$styleVersion  = file_exists(__DIR__ . '/links/style.css') ? date("Y-m-d_H-i-s", filemtime(__DIR__ . '/links/style.css')) : time();
-$scriptVersion = file_exists(__DIR__ . '/bin/frontend.js') ? date("Y-m-d_H-i-s", filemtime(__DIR__ . '/bin/frontend.js')) : time();
+// --- Versionierung ---
+$styleVersion = file_exists(__DIR__ . '/links/style.css') ? date("Y-m-d_H-i-s", filemtime(__DIR__ . '/links/style.css')) : time();
+$frontendScriptFiles = [
+    'frontend-general.js',
+    'frontend-offline.js',
+    'frontend-lists.js',
+    'frontend-auth.js',
+    'frontend-items.js',
+    'frontend-main.js',
+];
+$scriptVersionTimestamp = 0;
+foreach ($frontendScriptFiles as $scriptFile) {
+    $scriptPath = __DIR__ . '/bin/' . $scriptFile;
+    if (file_exists($scriptPath)) {
+        $mtime = filemtime($scriptPath);
+        if ($mtime !== false && $mtime > $scriptVersionTimestamp) {
+            $scriptVersionTimestamp = $mtime;
+        }
+    }
+}
+if ($scriptVersionTimestamp === 0) {
+    $scriptVersionTimestamp = time();
+}
+$scriptVersion = date("Y-m-d_H-i-s", $scriptVersionTimestamp);
 
 // --- Dynamisches CSS für Speiseplan ---
 $speiseplanCss = '';
@@ -251,6 +272,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
                         <li>Einträge <strong>sortieren</strong>: halte und ziehe die Einträge auf dem Symbol <span class="dragHandle btn"></span> ganz vorne noch oben oder unten. Listen werden immer nach dem Alphabet sortiert.</li>
                         <li>Eintrag <strong>abhaken</strong>: Klicke auf den Namen des Eintrags, um ihn als erledigt zu markieren.</li>
                         <li>Abgehakten Eintrag <strong>wieder aktivieren</strong>: Klicke auf den Eintrag, um ihn wieder zu aktivieren.</li>
+                        <li>Einträge <strong>verschieben</strong>: Ziehe einen Eintrag ganz nach oben um ihn auf eine andere Liste zu verschieben.</li>
                         <li><strong>Speiseplan</strong>: Ein Zettel mit den Namen 'Speiseplan' hat eine Sonderrolle. Einträge werden farblich und mit Wochentag markiert und der aktive Eintrag wird immer um 8 Uhr deaktiviert.</li>
                         <li><strong>Wichtige / Unwichtige Einträge</strong> kann man mit einem '!' oder einem '?' am Ende versehen.</li>
                         <p>Weitere Information und die aktuelle Version bei <a href="https://zenziwerken.github.io/Meinkaufszettel/">GitHub<span class="gitHubIcon"></span></a></p>
@@ -385,7 +407,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
     </main>
     <script nonce="<?= htmlspecialchars($cspNonce, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">
 
-        // Theme initialisation and menu label are handled in bin/frontend.js
+        // Theme initialisation and menu label are handled in the frontend modules.
 
         const speiseplanName = <?= json_encode($speiseplanName) ?>;
         const csrfToken = <?= json_encode($_SESSION['csrf_token'] ?? '') ?>;
@@ -428,7 +450,9 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
             }).catch(() => {});
         })();
     </script>
-    <script src="bin/frontend.js?<?= $scriptVersion ?>"></script>
+    <?php foreach ($frontendScriptFiles as $scriptFile): ?>
+        <script src="bin/<?= htmlspecialchars($scriptFile, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>?<?= $scriptVersion ?>"></script>
+    <?php endforeach; ?>
 </body>
 
 </html>
