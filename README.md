@@ -180,6 +180,7 @@ Erstelle einen Cronjob für `data/cron.php`:
 - **Abhaken**: Auf Eintrag klicken (verschiebt nach unten)
 - **Reaktivieren**: Auf abgehakten Eintrag klicken
 - **Löschen**: 🗑️-Symbol (mit 5-Sek-Undo)
+- **Verschieben**: Eintrag ganz nach oben schieben um ihn auf eine andere Liste zu setzen
 
 ### Wichtige/unwichtige Einträge
 - `Eintrag!` → Roter Rahmen, fettgedruckt
