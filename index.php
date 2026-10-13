@@ -32,14 +32,18 @@ $userPasswordFile = $userDir . '/.password';
 
 // Versuche optionalen Anzeigenamen aus .settings zu laden (falls vorhanden)
 $displayName = null;
+$userSettings = [];
 $settingsFile = $userDir . '/.settings';
 if (isset($username) && $username && is_dir($userDir) && file_exists($settingsFile)) {
     $raw = @file_get_contents($settingsFile);
     if ($raw !== false) {
         $decoded = json_decode($raw, true);
 
-        if (json_last_error() === JSON_ERROR_NONE && is_array($decoded) && isset($decoded['displayName']) && $decoded['displayName'] !== '') {
-            $displayName = (string)$decoded['displayName'];
+        if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+            $userSettings = $decoded;
+            if (isset($decoded['displayName']) && $decoded['displayName'] !== '') {
+                $displayName = (string)$decoded['displayName'];
+            }
         }
     }
 }
@@ -133,6 +137,18 @@ if (file_exists($userDir . '/history.txt')) {
     $specialMenuItems .= ($specialMenuItems === '') ? "\n<hr>\n" : "\n";
     $specialMenuItems .= "<button id='menuShowSpeiseplan' class='menu-item speiseplan'>Speiseplanverlauf</button>\n";
 }
+$newsFile = $dataDirBase . '/news.txt';
+$hasNews = is_file($newsFile);
+$newsTimestamp = $hasNews ? filemtime($newsFile) : false;
+$hasUnreadNews = $newsTimestamp !== false && $newsTimestamp > (int)($userSettings['newsLastSeen'] ?? 0);
+$newsContent = $hasNews ? (string)file_get_contents($newsFile) : '';
+if ($hasNews) {
+    $specialMenuItems .= ($specialMenuItems === '') ? "\n<hr>\n" : "\n";
+    $newsUnreadClass = $hasUnreadNews ? ' has-unread-news' : '';
+    $specialMenuItems .= "<button id='menuShowNews' class='menu-item news{$newsUnreadClass}' data-news-timestamp='" . (int)$newsTimestamp . "'>Neuigkeiten</button>\n";
+}
+
+
 // CSP-Nonce für erlaubte inline-Scripts erzeugen
 try {
     $cspNonce = base64_encode(random_bytes(16));
@@ -209,7 +225,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
 
             <!-- Übersicht -->
             <div id="listOverview">
-                <span class="more" id="moreBtn" title="Mehr">⋯</span>
+                <span class="more<?= $hasUnreadNews ? ' has-unread-news' : '' ?>" id="moreBtn" title="Mehr">⋯</span>
                 <div id="moreMenu" class="more-menu" aria-hidden="true" role="navigation">
                     <button id="menuShowHelp" class="menu-item help">Kurzanleitung</button>
                     <hr>
@@ -258,6 +274,16 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
                 <h1>Speiseplanverlauf</h1>
                 <ul id="itemListSpeiseplan"></ul>
             </div>
+
+            <?php if ($hasNews): ?>
+                <div id="newsModal" class="modal" aria-hidden="true" role="dialog" aria-modal="false">
+                    <div class="modal-inner">
+                        <button id="closeNews" class="modal-close" aria-label="Neuigkeiten schließen">×</button>
+                        <h2 class="modal-title">Neuigkeiten</h2>
+                        <div class="news-content"><?= $newsContent ?></div>
+                    </div>
+                </div>
+            <?php endif; ?>
 
             <!-- Hilfetexte (Overlay/Modal) -->
             <div id="helpTexts" class="help" aria-hidden="true">

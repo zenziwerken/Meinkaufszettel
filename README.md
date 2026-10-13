@@ -19,6 +19,7 @@ Eine schlanke, selbst-gehostete Web-App für gemeinsame Einkaufslisten und Notiz
 - Einträge mit `!` oder `?` für Prioritäten markieren
 - Such-Dropdown mit Live-Vorschlägen aus bestehenden Einträgen
 - Automatisches Entfernen von Zahlenangaben bei inaktiven Einträgen
+- Verschieben von Einträgen von einer Liste auf eine andere
 
 ### Zusammenarbeit
 - **Geteilte Listen**: Sende einen Share-Link an andere Nutzer

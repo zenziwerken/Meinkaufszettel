@@ -520,6 +520,42 @@ if ($action === 'change_displayname') {
     exit;
 }
 
+if ($action === 'mark_news_seen') {
+    if ($userDir === null) sendError('Kein Benutzer angegeben.', 400);
+
+    $newsFile = $dataDirBase . '/news.txt';
+    $currentNewsTimestamp = is_file($newsFile) ? filemtime($newsFile) : false;
+    $requestedTimestamp = filter_var($data['newsTimestamp'] ?? null, FILTER_VALIDATE_INT);
+    if ($currentNewsTimestamp === false || $requestedTimestamp === false || $requestedTimestamp < 0) {
+        sendError('Neuigkeiten konnten nicht als gelesen gespeichert werden.', 400);
+    }
+
+    $settingsFile = $userDir . '/.settings';
+    $settings = [];
+    if (file_exists($settingsFile)) {
+        $raw = @file_get_contents($settingsFile);
+        if ($raw !== false) {
+            $decoded = json_decode($raw, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $settings = $decoded;
+            }
+        }
+    }
+
+    $settings['newsLastSeen'] = max(
+        (int)($settings['newsLastSeen'] ?? 0),
+        min($requestedTimestamp, $currentNewsTimestamp)
+    );
+    $payload = json_encode($settings, JSON_UNESCAPED_UNICODE);
+    if ($payload === false || !atomicReplaceFile($settingsFile, $payload)) {
+        sendError('Neuigkeiten konnten nicht als gelesen gespeichert werden.', 500);
+    }
+    @chmod($settingsFile, 0640);
+
+    echo json_encode(['success' => true]);
+    exit;
+}
+
 // E-Mail ändern (nur für angemeldete Benutzer, aktuelle Passwort-Bestätigung erforderlich)
 if ($action === 'change_email') {
     // Nur Session-basierte Auth erlaubt (Vermeidet Namens-Mismatch beim Umbenennen)

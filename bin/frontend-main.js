@@ -1,4 +1,4 @@
-// Last modified: 2026/10/05 08:41:47
+// Last modified: 2026/10/13 10:35:35
 
 // ==========================================================
 //  Initialisierung bei DOMContentLoaded
@@ -292,6 +292,24 @@ document.addEventListener("DOMContentLoaded", function () {
     });
     document.getElementById('menuShowSpeiseplan')?.addEventListener('click', (e) => {
       e.stopPropagation(); closeMoreMenu(); openSpeiseplanHistory();
+    });
+    document.getElementById('menuShowNews')?.addEventListener('click', async (e) => {
+      e.stopPropagation(); closeMoreMenu(); _openModal('newsModal');
+      const newsButton = e.currentTarget;
+      const newsTimestamp = Number(newsButton.dataset.newsTimestamp);
+      try {
+        const response = await postToBackend({ action: 'mark_news_seen', newsTimestamp });
+        const data = await response.json();
+        if (!response.ok || !data || data.success !== true) throw new Error('Speichern fehlgeschlagen');
+        newsButton.classList.remove('has-unread-news');
+        document.getElementById('moreBtn')?.classList.remove('has-unread-news');
+      } catch (err) {
+        showStatus('Neuigkeiten konnten nicht als gelesen gespeichert werden.', 'error');
+      }
+    });
+    document.getElementById('closeNews')?.addEventListener('click', () => _closeModal('newsModal'));
+    document.getElementById('newsModal')?.addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) _closeModal('newsModal');
     });
     document.getElementById('menuDataProtection')?.addEventListener('click', (e) => {
       e.stopPropagation(); closeMoreMenu(); _openModal('dataProtectionModal', '#downloadUserDataBtn');

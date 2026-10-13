@@ -1,0 +1,1 @@
+Es gibt eine neue Funktion um <b>Einträge von einer auf eine andere Liste zu verschieben</b>. Dazu zieht man den <b>Eintrag nach ganz oben</b> auf den Listennamen. Dann erscheint das Bedienelement 'Eintrag verscheiben'. Lässt man den Eintrag dann fallen, öffnet sich die Auswahl auf welche Liste der Eintrag verschoben werden soll. 

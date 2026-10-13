@@ -3,7 +3,7 @@
  * - Navigation (HTML): Network-first, fallback cache
  * - Statische Assets (same-origin GET): Stale-while-revalidate
  */
-const VERSION = '51';
+const VERSION = '59';
 const CACHE_NAME = 'einkaufszettel-pwa-v' + VERSION;
 const FRONTEND_SCRIPTS = [
   'frontend-general.js',
